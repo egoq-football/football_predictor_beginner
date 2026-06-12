@@ -3,31 +3,46 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from football_predictor.data_loader import download_results
+from football_predictor.data_loader import download_results, load_results, list_teams
 from football_predictor.predict import prepare_model, predict_match
 from football_predictor.stats import form_chart_data
 
 st.set_page_config(page_title="Football Predictor", page_icon="⚽", layout="wide")
 
 st.title("⚽ Football Predictor")
-st.caption("Версия 2: больше статистики, усиленная модель, вероятности счета, тоталов и формы команд.")
+st.caption("Версия 2.1: ускоренная загрузка, кэширование модели, расширенная статистика и вероятности.")
+
+@st.cache_data(show_spinner=False)
+def get_data_for_team_list():
+    return load_results("data/results.csv")
+
+@st.cache_resource(show_spinner=False)
+def get_prepared_model(force_retrain: bool = False):
+    return prepare_model(force_retrain=force_retrain)
 
 with st.sidebar:
     st.header("Данные и обучение")
-    if st.button("1. Скачать/обновить данные"):
+    if st.button("Скачать/обновить данные"):
         with st.spinner("Скачиваю открытый датасет матчей сборных..."):
             path = download_results("data/results.csv")
+        st.cache_data.clear()
+        st.cache_resource.clear()
         st.success(f"Данные сохранены: {path}")
 
     force_retrain = st.checkbox("Переобучить модель", value=False)
-    st.info("Если после обновления сайта видишь ошибку модели, включи «Переобучить модель» один раз.")
+    if st.button("Очистить кэш и перезапустить расчёт"):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.rerun()
+
+    st.info("Обычно галочку «Переобучить модель» держать выключенной. Включай её только один раз после крупного обновления.")
 
 try:
-    with st.spinner("Готовлю модель. Первый запуск может занять 1–3 минуты..."):
-        df, model, states, h2h, teams = prepare_model(force_retrain=force_retrain)
+    df_for_teams = get_data_for_team_list()
+    teams = list_teams(df_for_teams)
 except Exception as exc:
-    st.error("Не получилось подготовить модель.")
-    st.write("Сначала нажми слева кнопку **Скачать/обновить данные**. Если ошибка повторяется, пришли мне её текст.")
+    st.error("Не получилось загрузить список команд.")
+    st.write("Нажми слева **Скачать/обновить данные**. Если ошибка повторяется, пришли мне её текст.")
     st.exception(exc)
     st.stop()
 
@@ -42,9 +57,12 @@ with col3:
 
 if st.button("Сделать прогноз", type="primary", use_container_width=True):
     try:
-        result = predict_match(home, away, neutral, model, states, h2h, df=df)
+        with st.spinner("Готовлю модель и считаю прогноз. Первый расчёт после обновления может занять 1–2 минуты..."):
+            df, model, states, h2h, _ = get_prepared_model(force_retrain=force_retrain)
+            result = predict_match(home, away, neutral, model, states, h2h, df=df)
     except Exception as exc:
         st.error(str(exc))
+        st.exception(exc)
         st.stop()
 
     st.divider()

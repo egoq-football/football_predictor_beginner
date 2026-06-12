@@ -13,7 +13,7 @@ from sklearn.preprocessing import StandardScaler
 
 from .features import FEATURE_COLUMNS
 
-MODEL_VERSION = "0.2.0"
+MODEL_VERSION = "0.2.1-fast"
 
 
 class FootballPredictor:
@@ -25,21 +25,21 @@ class FootballPredictor:
         self.logistic = Pipeline(
             steps=[
                 ("scaler", StandardScaler()),
-                ("model", LogisticRegression(max_iter=1500, class_weight="balanced", C=0.8)),
+                ("model", LogisticRegression(max_iter=800, class_weight="balanced", C=0.8)),
             ]
         )
         self.forest = RandomForestClassifier(
-            n_estimators=420,
-            max_depth=11,
-            min_samples_leaf=14,
+            n_estimators=140,
+            max_depth=10,
+            min_samples_leaf=18,
             random_state=42,
-            n_jobs=-1,
+            n_jobs=1,
             class_weight="balanced_subsample",
         )
         self.boosting = HistGradientBoostingClassifier(
-            max_iter=180,
-            learning_rate=0.045,
-            max_leaf_nodes=24,
+            max_iter=80,
+            learning_rate=0.055,
+            max_leaf_nodes=20,
             l2_regularization=0.06,
             random_state=42,
         )
