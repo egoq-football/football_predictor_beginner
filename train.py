@@ -9,7 +9,7 @@ print("Загружаю данные...")
 df = load_results("data/results.csv")
 
 print("Создаю признаки для обучения...")
-table = build_training_table(df)
+table = build_training_table(df, min_year=2010)
 
 print("Обучаю модель...")
 model = train_with_chronological_test(table)

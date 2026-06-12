@@ -5,7 +5,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, log_loss
 from sklearn.pipeline import Pipeline
@@ -13,11 +13,11 @@ from sklearn.preprocessing import StandardScaler
 
 from .features import FEATURE_COLUMNS
 
-MODEL_VERSION = "0.2.1-fast"
+MODEL_VERSION = "0.3.1-2010-balanced"
 
 
 class FootballPredictor:
-    """Small ensemble: logistic regression + random forest + gradient boosting."""
+    """Small ensemble: logistic regression + random forest + extra trees."""
 
     def __init__(self) -> None:
         self.feature_columns_ = list(FEATURE_COLUMNS)
@@ -29,19 +29,20 @@ class FootballPredictor:
             ]
         )
         self.forest = RandomForestClassifier(
-            n_estimators=140,
+            n_estimators=100,
             max_depth=10,
             min_samples_leaf=18,
             random_state=42,
             n_jobs=1,
             class_weight="balanced_subsample",
         )
-        self.boosting = HistGradientBoostingClassifier(
-            max_iter=80,
-            learning_rate=0.055,
-            max_leaf_nodes=20,
-            l2_regularization=0.06,
-            random_state=42,
+        self.boosting = ExtraTreesClassifier(
+            n_estimators=90,
+            max_depth=10,
+            min_samples_leaf=10,
+            random_state=43,
+            n_jobs=1,
+            class_weight="balanced",
         )
         self.classes_ = np.array([0, 1, 2])
         self.metrics_: dict[str, float] = {}
@@ -50,9 +51,22 @@ class FootballPredictor:
     def fit(self, table: pd.DataFrame) -> "FootballPredictor":
         X = table[self.feature_columns_]
         y = table["target"].astype(int)
-        self.logistic.fit(X, y)
-        self.forest.fit(X, y)
-        self.boosting.fit(X, y)
+
+        # The full archive starts in 2010, but recent matches should influence
+        # the fitted models more strongly. A six-year half-life keeps old data
+        # useful while reducing its weight. The separate last-five-match layer
+        # in predict.py remains outside this 50% mathematical-model block.
+        if "date" in table.columns:
+            dates = pd.to_datetime(table["date"], errors="coerce")
+            latest = dates.max()
+            age_years = (latest - dates).dt.days.fillna(0).to_numpy(dtype=float) / 365.25
+            sample_weight = 0.25 + 0.75 * np.power(0.5, age_years / 6.0)
+        else:
+            sample_weight = np.ones(len(table), dtype=float)
+
+        self.logistic.fit(X, y, model__sample_weight=sample_weight)
+        self.forest.fit(X, y, sample_weight=sample_weight)
+        self.boosting.fit(X, y, sample_weight=sample_weight)
         return self
 
     def predict_proba(self, features: pd.DataFrame) -> np.ndarray:
@@ -60,7 +74,7 @@ class FootballPredictor:
         p1 = self._aligned_proba(self.logistic, X)
         p2 = self._aligned_proba(self.forest, X)
         p3 = self._aligned_proba(self.boosting, X)
-        probs = p1 * 0.28 + p2 * 0.42 + p3 * 0.30
+        probs = p1 * 0.35 + p2 * 0.40 + p3 * 0.25
         return probs / probs.sum(axis=1, keepdims=True)
 
     def _aligned_proba(self, estimator, X: pd.DataFrame) -> np.ndarray:

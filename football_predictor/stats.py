@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from .features import TeamState
+from .fifa_ranking import FifaRankingInfo
 
 
 def _result_label(gf: int, ga: int) -> str:
@@ -57,7 +58,11 @@ def h2h_matches(df: pd.DataFrame, team1: str, team2: str, n: int = 10) -> pd.Dat
     return pd.DataFrame(rows)
 
 
-def team_summary(team: str, state: TeamState) -> dict[str, float | str | int]:
+def team_summary(
+    team: str,
+    state: TeamState,
+    fifa: FifaRankingInfo | None = None,
+) -> dict[str, float | str | int]:
     points_5 = list(state.recent_points)[-5:]
     points_10 = list(state.recent_points)[-10:]
     gf_5 = list(state.recent_goals_for)[-5:]
@@ -73,8 +78,10 @@ def team_summary(team: str, state: TeamState) -> dict[str, float | str | int]:
 
     return {
         "Команда": team,
-        "Elo": round(float(state.elo), 1),
-        "Матчей в базе": int(state.matches),
+        "Рейтинг FIFA": fifa.rank if fifa else "нет данных",
+        "Очки FIFA": round(float(fifa.points), 2) if fifa else "нет данных",
+        "Расчётный Elo с 2010": round(float(state.elo), 1),
+        "Матчей с 2010": int(state.matches),
         "Очки/матч за 5": round(avg(points_5, 1.0), 2),
         "Очки/матч за 10": round(avg(points_10, 1.0), 2),
         "Победы за 5": f"{rate(points_5, 3) * 100:.0f}%",
