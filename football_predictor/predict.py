@@ -55,26 +55,49 @@ def prepare_model(
 
 
 def recent_form_probabilities(features: pd.DataFrame) -> dict[str, float]:
-    """Three-way probabilities where the last five matches dominate."""
+    """Three-way probabilities with opponent-adjusted last-five form."""
     row = features.iloc[0]
     edge = (
-        float(row["form_points_diff_5"]) * 0.95
-        + float(row["goal_diff_form_diff_5"]) * 0.62
-        + float(row["win_rate_diff_5"]) * 0.45
-        + (float(row["home_gf_5"]) - float(row["away_gf_5"])) * 0.18
-        + (float(row["away_ga_5"]) - float(row["home_ga_5"])) * 0.18
+        float(row["form_points_diff_5"]) * 0.58
+        + float(row["strength_form_points_diff_5"]) * 0.62
+        + float(row["performance_diff_5"]) * 1.35
+        + float(row["goal_diff_form_diff_5"]) * 0.36
+        + float(row["strength_goal_diff_diff_5"]) * 0.34
+        + float(row["win_rate_diff_5"]) * 0.34
+        + (float(row["home_gf_5"]) - float(row["away_gf_5"])) * 0.12
+        + (float(row["away_ga_5"]) - float(row["home_ga_5"])) * 0.12
     )
-    # The longer 10-match window is deliberately only a small stabilizer.
-    edge += float(row["form_points_diff_10"]) * 0.12
-    edge += float(row["goal_diff_form_diff_10"]) * 0.08
+    # The 10-match window is deliberately only a small stabilizer.
+    edge += float(row["form_points_diff_10"]) * 0.10
+    edge += float(row["goal_diff_form_diff_10"]) * 0.06
 
-    non_draw_home = 1.0 / (1.0 + np.exp(-edge / 1.35))
+    non_draw_home = 1.0 / (1.0 + np.exp(-edge / 1.30))
     draw_signal = float(row["draw_rate_sum_5"])
     draw = 0.21 + min(draw_signal * 0.10, 0.10) - min(abs(edge) * 0.025, 0.07)
     draw = float(np.clip(draw, 0.16, 0.34))
     home_win = float((1.0 - draw) * non_draw_home)
     away_win = float((1.0 - draw) * (1.0 - non_draw_home))
     return {"away_win": away_win, "draw": draw, "home_win": home_win, "edge": float(edge)}
+
+
+def _fifa_gap_description(home: str, away: str, home_fifa, away_fifa) -> str:
+    points_gap = abs(float(home_fifa.points) - float(away_fifa.points))
+    rank_gap = abs(int(home_fifa.rank) - int(away_fifa.rank))
+    leader = home if home_fifa.points > away_fifa.points else away
+
+    if points_gap < 30 and rank_gap <= 5:
+        level = "небольшое"
+    elif points_gap < 80 and rank_gap <= 15:
+        level = "заметное"
+    elif points_gap < 170 and rank_gap <= 35:
+        level = "значительное"
+    else:
+        level = "очень большое"
+
+    return (
+        f"Разница составляет {points_gap:.2f} очка и {rank_gap} позиций — это {level} "
+        f"преимущество рейтинга в пользу {leader}."
+    )
 
 
 def predict_match(
@@ -107,6 +130,8 @@ def predict_match(
     fifa = fifa_probabilities(home, away, neutral, fifa_lookup)
     fifa_probs = np.array([fifa["away_win"], fifa["draw"], fifa["home_win"]], dtype=float)
 
+    # Goal and score markets are based directly on both teams' recent scoring
+    # and conceding averages. Elo/FIFA do not alter the scoreline lambdas.
     home_xg, away_xg = estimate_expected_goals(features, fifa_points_diff=fifa["points_diff"])
     markets = market_probabilities(home_xg, away_xg, max_goals=8)
     poisson_probs = np.array(
@@ -114,14 +139,9 @@ def predict_match(
         dtype=float,
     )
 
-    # Two equally important blocks:
-    # 50% current information (last five matches + FIFA ranking) and
-    # 50% mathematical models (machine learning + Poisson + fuzzy rules).
     if fifa["available"]:
         weights = {"recent5": 0.30, "fifa": 0.20, "ml": 0.25, "poisson": 0.20, "fuzzy": 0.05}
     else:
-        # When FIFA data is unavailable, its 20% is transferred to recent form.
-        # The 50/50 balance between current information and models is preserved.
         weights = {"recent5": 0.50, "fifa": 0.00, "ml": 0.25, "poisson": 0.20, "fuzzy": 0.05}
 
     final_probs = (
@@ -139,15 +159,15 @@ def predict_match(
     home_fifa = fifa_lookup.get(home)
     away_fifa = fifa_lookup.get(away)
     explanations = explain_features(features, home, away)
-    explanations.insert(0, "Последние 5 матчей и рейтинг FIFA вместе формируют 50% итогового прогноза; ещё 50% дают математические модели.")
     if home_fifa and away_fifa:
         explanations.insert(
-            1,
+            0,
             f"Рейтинг FIFA: {home} — {home_fifa.rank}-е место ({home_fifa.points:.2f}), "
-            f"{away} — {away_fifa.rank}-е место ({away_fifa.points:.2f}).",
+            f"{away} — {away_fifa.rank}-е место ({away_fifa.points:.2f}). "
+            + _fifa_gap_description(home, away, home_fifa, away_fifa),
         )
     else:
-        explanations.insert(1, "Для одной из команд рейтинг FIFA не загрузился; его вес автоматически перераспределён.")
+        explanations.insert(0, "Для одной из команд рейтинг FIFA не загрузился; его вес перераспределён на последние матчи.")
 
     result = {
         "home": home,
@@ -164,6 +184,8 @@ def predict_match(
         "model_weights": weights,
         "expected_goals_home": home_xg,
         "expected_goals_away": away_xg,
+        "scoreline_home_mean": home_xg,
+        "scoreline_away_mean": away_xg,
         "markets": markets,
         "most_likely_outcomes": likely,
         "top_scorelines": scores,

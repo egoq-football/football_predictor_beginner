@@ -13,7 +13,7 @@ from sklearn.preprocessing import StandardScaler
 
 from .features import FEATURE_COLUMNS
 
-MODEL_VERSION = "0.3.1-2010-balanced"
+MODEL_VERSION = "0.3.2-2010-opponent-strength"
 
 
 class FootballPredictor:

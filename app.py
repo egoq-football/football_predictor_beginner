@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from football_predictor.data_loader import download_results, load_results, list_teams
-from football_predictor.fifa_ranking import download_fifa_rankings, load_fifa_rankings, ranking_lookup
+from football_predictor.fifa_ranking import load_fifa_rankings, ranking_lookup
 from football_predictor.predict import prepare_model, predict_match
 from football_predictor.stats import form_chart_data
 
@@ -15,7 +15,7 @@ st.set_page_config(page_title="Football Predictor", page_icon="⚽", layout="wid
 st.markdown(
     """
     <style>
-    div[data-testid="stButton"] > button {min-height: 2.45rem;}
+    div[data-testid="stButton"] > button {min-height: 2.25rem;}
     .small-note {font-size: 0.90rem; color: #666;}
     </style>
     """,
@@ -23,10 +23,6 @@ st.markdown(
 )
 
 st.title("⚽ Football Predictor")
-st.caption(
-    "Версия 3.1: матчи с 2010 года; 50% прогноза дают последние 5 матчей и рейтинг FIFA, "
-    "ещё 50% — математические модели."
-)
 
 
 @st.cache_data(show_spinner=False)
@@ -58,26 +54,19 @@ with st.sidebar:
         st.rerun()
 
     if st.button("Обновить рейтинг FIFA"):
-        with st.spinner("Загружаю рейтинг FIFA..."):
-            try:
-                download_fifa_rankings("data/fifa_rankings.csv")
-            except Exception as exc:
-                st.error(f"Не получилось обновить рейтинг FIFA: {exc}")
-            else:
-                st.cache_data.clear()
-                st.success("Рейтинг FIFA обновлён.")
-                st.rerun()
+        with st.spinner("Обновляю рейтинг FIFA..."):
+            fifa_path = Path("data/fifa_rankings.csv")
+            if fifa_path.exists():
+                fifa_path.unlink()
+        st.cache_data.clear()
+        st.success("Кэш рейтинга FIFA очищен. Новый рейтинг загрузится при следующем прогнозе.")
+        st.rerun()
 
     force_retrain = st.checkbox("Переобучить модель", value=False)
     if st.button("Очистить кэш"):
         st.cache_data.clear()
         st.cache_resource.clear()
         st.rerun()
-
-    st.info(
-        "Все результаты, форма и расчётный Elo берутся только из завершённых матчей "
-        "с 1 января 2010 года."
-    )
 
 try:
     df_for_teams = get_data_for_team_list()
@@ -92,15 +81,7 @@ fifa_df = get_fifa_data(False)
 fifa_lookup = ranking_lookup(fifa_df)
 
 max_date = pd.to_datetime(df_for_teams["date"]).max().date().isoformat()
-st.caption(
-    f"В расчёте: {len(df_for_teams)} завершённых матчей с 01.01.2010 по {max_date}; "
-    f"команд в выборе: {len(teams)}."
-)
-if not fifa_lookup:
-    st.warning(
-        "Рейтинг FIFA пока не загрузился. Прогноз будет работать без него. "
-        "Попробуй кнопку «Обновить рейтинг FIFA» в боковой панели."
-    )
+st.caption(f"В расчёте: {len(df_for_teams)} завершённых матчей с 01.01.2010 по {max_date}.")
 
 st.subheader("Выбор матча")
 col1, col2, col3 = st.columns([2, 2, 1])
@@ -112,7 +93,6 @@ with col2:
 with col3:
     neutral = st.checkbox("Нейтральное поле", value=True)
 
-# A natural-width button stays compact on both desktop and mobile.
 run_prediction = st.button("Сделать прогноз", type="primary")
 
 if run_prediction:
@@ -142,10 +122,6 @@ if run_prediction:
     c2.metric("Ничья", f"{result['prob_draw'] * 100:.1f}%")
     c3.metric(f"Победа {away}", f"{result['prob_away_win'] * 100:.1f}%")
 
-    st.progress(result["prob_home_win"], text=f"Шанс победы {home}: {result['prob_home_win'] * 100:.1f}%")
-    st.progress(result["prob_draw"], text=f"Шанс ничьей: {result['prob_draw'] * 100:.1f}%")
-    st.progress(result["prob_away_win"], text=f"Шанс победы {away}: {result['prob_away_win'] * 100:.1f}%")
-
     xg1, xg2, total_xg = st.columns(3)
     xg1.metric(f"Ожидаемые голы {home}", f"{result['expected_goals_home']:.2f}")
     xg2.metric(f"Ожидаемые голы {away}", f"{result['expected_goals_away']:.2f}")
@@ -158,7 +134,7 @@ if run_prediction:
         "Счета и тоталы",
         "Форма",
         "Очные встречи",
-        "Техника модели",
+        "Слои модели",
     ])
 
     with tab1:
@@ -166,20 +142,14 @@ if run_prediction:
         for item in result["explanations"]:
             st.write(f"- {item}")
 
-        st.write("### Вероятности по слоям модели")
-        layer_df = pd.DataFrame([
-            {"Модель": "Последние 5 матчей", home: result["recent_probs"]["home_win"], "Ничья": result["recent_probs"]["draw"], away: result["recent_probs"]["away_win"]},
-            {"Модель": "Рейтинг FIFA", home: result["fifa_probs"]["home_win"], "Ничья": result["fifa_probs"]["draw"], away: result["fifa_probs"]["away_win"]},
-            {"Модель": "Машинное обучение", home: result["ml_probs"]["home_win"], "Ничья": result["ml_probs"]["draw"], away: result["ml_probs"]["away_win"]},
-            {"Модель": "Пуассон по голам", home: result["poisson_probs"]["home_win"], "Ничья": result["poisson_probs"]["draw"], away: result["poisson_probs"]["away_win"]},
-            {"Модель": "Нечёткие правила", home: result["fuzzy_probs"]["home_win"], "Ничья": result["fuzzy_probs"]["draw"], away: result["fuzzy_probs"]["away_win"]},
-            {"Модель": "Итог", home: result["prob_home_win"], "Ничья": result["prob_draw"], away: result["prob_away_win"]},
-        ])
-        st.dataframe(
-            layer_df.style.format({home: "{:.1%}", "Ничья": "{:.1%}", away: "{:.1%}"}),
-            use_container_width=True,
-            hide_index=True,
-        )
+        with st.expander("Что такое Elo в этой программе?"):
+            st.write(
+                "Elo — внутренний динамический рейтинг силы, отдельный от официального рейтинга FIFA. "
+                "Каждая команда начинает с 1500 очков. После каждого матча рейтинг меняется: победа над "
+                "сильным соперником даёт больше очков, поражение от слабого отнимает больше. Также учитываются "
+                "фактор своего поля и разница голов. В этой программе Elo пересчитывается последовательно по "
+                "всем завершённым матчам начиная с 2010 года."
+            )
 
     with tab2:
         st.write("### Наиболее вероятный вариант в каждой группе исходов")
@@ -189,35 +159,26 @@ if run_prediction:
             use_container_width=True,
             hide_index=True,
         )
-        st.warning(
-            "Эти вероятности не являются независимыми: их нельзя перемножать и считать готовым экспрессом."
-        )
-        st.info(
-            "Угловые и жёлтые карточки пока не рассчитываются: используемый открытый датасет сборных "
-            "не содержит их исторической статистики. Добавлять выдуманные оценки было бы неправильно."
-        )
 
     with tab3:
         st.write("### Сравнение команд")
         summary_df = pd.DataFrame(result["team_summary"])
         st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
-        st.write("### Ключевые числовые признаки")
-        key_features = {
-            "Разница очков FIFA с учётом поля": result["fifa_probs"]["points_diff"],
-            "Разница Elo с учётом поля": result["features"]["elo_diff"],
-            "Разница очков за 5 матчей": result["features"]["form_points_diff_5"],
-            "Разница голов за 5 матчей": result["features"]["goal_diff_form_diff_5"],
-            "Разница атаки за 10 матчей": result["features"]["attack_diff_10"],
-            "Разница обороны за 10 матчей": result["features"]["defense_diff_10"],
-            "Очные встречи: разница голов": result["features"]["h2h_goal_diff"],
-        }
-        st.dataframe(pd.DataFrame([key_features]).T.rename(columns={0: "Значение"}), use_container_width=True)
-
     with tab4:
         st.write("### Наиболее вероятные счета")
+        st.caption(
+            "Эти счёты считаются по средним забитым и пропущенным голам обеих команд, "
+            "с повышенным весом последних 5 матчей."
+        )
         score_df = pd.DataFrame(result["top_scorelines"], columns=["Счёт", "Вероятность"])
         st.dataframe(score_df.style.format({"Вероятность": "{:.1%}"}), use_container_width=True, hide_index=True)
+
+        means_df = pd.DataFrame([
+            {"Показатель": f"Среднее для счёта {home}", "Значение": round(result['scoreline_home_mean'], 2)},
+            {"Показатель": f"Среднее для счёта {away}", "Значение": round(result['scoreline_away_mean'], 2)},
+        ])
+        st.dataframe(means_df, use_container_width=True, hide_index=True)
 
         st.write("### Основные тоталы и дополнительные вероятности")
         m = result["markets"]
@@ -259,24 +220,22 @@ if run_prediction:
             st.dataframe(h2h_table, use_container_width=True, hide_index=True)
 
     with tab7:
-        st.write("### Баланс двух основных блоков")
-        info_weight = result["model_weights"]["recent5"] + result["model_weights"]["fifa"]
-        math_weight = (
-            result["model_weights"]["ml"]
-            + result["model_weights"]["poisson"]
-            + result["model_weights"]["fuzzy"]
-        )
-        group_weights_df = pd.DataFrame([
-            {"Блок": "Последние 5 матчей + рейтинг FIFA", "Вес": info_weight},
-            {"Блок": "Математические модели", "Вес": math_weight},
+        st.write("### Вероятности по слоям модели")
+        layer_df = pd.DataFrame([
+            {"Модель": "Последние 5 матчей", home: result["recent_probs"]["home_win"], "Ничья": result["recent_probs"]["draw"], away: result["recent_probs"]["away_win"]},
+            {"Модель": "Рейтинг FIFA", home: result["fifa_probs"]["home_win"], "Ничья": result["fifa_probs"]["draw"], away: result["fifa_probs"]["away_win"]},
+            {"Модель": "Машинное обучение", home: result["ml_probs"]["home_win"], "Ничья": result["ml_probs"]["draw"], away: result["ml_probs"]["away_win"]},
+            {"Модель": "Пуассон по голам", home: result["poisson_probs"]["home_win"], "Ничья": result["poisson_probs"]["draw"], away: result["poisson_probs"]["away_win"]},
+            {"Модель": "Нечёткие правила", home: result["fuzzy_probs"]["home_win"], "Ничья": result["fuzzy_probs"]["draw"], away: result["fuzzy_probs"]["away_win"]},
+            {"Модель": "Итог", home: result["prob_home_win"], "Ничья": result["prob_draw"], away: result["prob_away_win"]},
         ])
         st.dataframe(
-            group_weights_df.style.format({"Вес": "{:.0%}"}),
+            layer_df.style.format({home: "{:.1%}", "Ничья": "{:.1%}", away: "{:.1%}"}),
             use_container_width=True,
             hide_index=True,
         )
 
-        st.write("### Детальные веса итогового прогноза")
+        st.write("### Веса компонентов")
         labels = {
             "recent5": "Последние 5 матчей",
             "fifa": "Рейтинг FIFA",
@@ -290,10 +249,7 @@ if run_prediction:
         ])
         st.dataframe(weights_df.style.format({"Вес": "{:.0%}"}), use_container_width=True, hide_index=True)
 
-        with st.expander("Показать технические признаки"):
-            st.json(result["features"])
-
-        st.write("### Качество модели на историческом тесте с 2010 года")
+        st.write("### Качество модели на историческом тесте")
         metrics = getattr(model, "metrics_", {})
         if metrics:
             metrics_df = pd.DataFrame([

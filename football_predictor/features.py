@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from .elo import BASE_ELO, HOME_ADVANTAGE, update_elo
+from .elo import BASE_ELO, HOME_ADVANTAGE, expected_score, match_result_points, update_elo
 
 
 @dataclass
@@ -18,11 +18,16 @@ class TeamState:
     recent_goal_diff: deque = field(default_factory=lambda: deque(maxlen=15))
     recent_goals_for: deque = field(default_factory=lambda: deque(maxlen=15))
     recent_goals_against: deque = field(default_factory=lambda: deque(maxlen=15))
-
-
-def _avg(values, default: float = 0.0) -> float:
-    values = list(values)
-    return float(np.mean(values)) if values else float(default)
+    # Strength of opponents at the moment each recent match was played.
+    recent_opponent_elo: deque = field(default_factory=lambda: deque(maxlen=15))
+    # Match result adjusted for opponent strength: points against a strong team
+    # are worth more than the same result against a weak team.
+    recent_strength_points: deque = field(default_factory=lambda: deque(maxlen=15))
+    # Difference between actual and Elo-expected result. Positive values mean
+    # the team performed better than its pre-match rating predicted.
+    recent_performance: deque = field(default_factory=lambda: deque(maxlen=15))
+    # Goal difference with a correction for opponent strength.
+    recent_strength_goal_diff: deque = field(default_factory=lambda: deque(maxlen=15))
 
 
 def _avg_last(values, n: int, default: float = 0.0) -> float:
@@ -83,6 +88,14 @@ FEATURE_COLUMNS = [
     "attack_diff_10",
     "defense_diff_10",
     "total_goals_diff_10",
+    # New recent-form features that explicitly measure the strength of the
+    # opponents faced in the last five matches.
+    "home_opponent_elo_5",
+    "away_opponent_elo_5",
+    "opponent_elo_diff_5",
+    "strength_form_points_diff_5",
+    "performance_diff_5",
+    "strength_goal_diff_diff_5",
     "h2h_goal_diff",
     "h2h_points_diff",
     "h2h_matches",
@@ -123,7 +136,13 @@ def _h2h_features(home: str, away: str, h2h_records) -> dict[str, float]:
     }
 
 
-def _make_feature_row(home: str, away: str, neutral: bool, states: dict[str, TeamState], h2h_records) -> dict[str, Any]:
+def _make_feature_row(
+    home: str,
+    away: str,
+    neutral: bool,
+    states: dict[str, TeamState],
+    h2h_records,
+) -> dict[str, Any]:
     home_state = states[home]
     away_state = states[away]
     home_adv = 0.0 if neutral else HOME_ADVANTAGE
@@ -134,6 +153,9 @@ def _make_feature_row(home: str, away: str, neutral: bool, states: dict[str, Tea
     home_ga_10 = _avg_last(home_state.recent_goals_against, 10, 1.25)
     away_gf_10 = _avg_last(away_state.recent_goals_for, 10, 1.25)
     away_ga_10 = _avg_last(away_state.recent_goals_against, 10, 1.25)
+
+    home_opp_elo_5 = _avg_last(home_state.recent_opponent_elo, 5, BASE_ELO)
+    away_opp_elo_5 = _avg_last(away_state.recent_opponent_elo, 5, BASE_ELO)
 
     row = {
         "elo_diff": elo_diff,
@@ -166,6 +188,12 @@ def _make_feature_row(home: str, away: str, neutral: bool, states: dict[str, Tea
         "attack_diff_10": home_gf_10 - away_gf_10,
         "defense_diff_10": away_ga_10 - home_ga_10,
         "total_goals_diff_10": (home_gf_10 + home_ga_10) - (away_gf_10 + away_ga_10),
+        "home_opponent_elo_5": home_opp_elo_5,
+        "away_opponent_elo_5": away_opp_elo_5,
+        "opponent_elo_diff_5": home_opp_elo_5 - away_opp_elo_5,
+        "strength_form_points_diff_5": _avg_last(home_state.recent_strength_points, 5, 1.0) - _avg_last(away_state.recent_strength_points, 5, 1.0),
+        "performance_diff_5": _avg_last(home_state.recent_performance, 5, 0.0) - _avg_last(away_state.recent_performance, 5, 0.0),
+        "strength_goal_diff_diff_5": _avg_last(home_state.recent_strength_goal_diff, 5, 0.0) - _avg_last(away_state.recent_strength_goal_diff, 5, 0.0),
         "neutral": int(neutral),
     }
     row.update(_h2h_features(home, away, h2h_records))
@@ -173,11 +201,7 @@ def _make_feature_row(home: str, away: str, neutral: bool, states: dict[str, Tea
 
 
 def build_training_table(df: pd.DataFrame, min_year: int = 1950) -> pd.DataFrame:
-    """Create a machine-learning table from historical matches.
-
-    Features for each row are calculated only from matches that happened earlier.
-    This prevents looking into the future.
-    """
+    """Create a leakage-free machine-learning table from historical matches."""
     states: dict[str, TeamState] = defaultdict(TeamState)
     h2h_records: dict[tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=8))
     rows: list[dict] = []
@@ -211,9 +235,42 @@ def build_training_table(df: pd.DataFrame, min_year: int = 1950) -> pd.DataFrame
     return table
 
 
-def _update_states_after_match(states, h2h_records, home: str, away: str, hs: int, aas: int, neutral: bool) -> None:
+def _update_states_after_match(
+    states,
+    h2h_records,
+    home: str,
+    away: str,
+    hs: int,
+    aas: int,
+    neutral: bool,
+) -> None:
     home_state = states[home]
     away_state = states[away]
+
+    # Capture opponent strength and expected result before ratings are updated.
+    home_opp_elo = float(away_state.elo)
+    away_opp_elo = float(home_state.elo)
+    home_adv = 0.0 if neutral else HOME_ADVANTAGE
+    expected_home = expected_score(home_state.elo + home_adv, away_state.elo)
+    expected_away = 1.0 - expected_home
+    actual_home = match_result_points(hs, aas)
+    actual_away = match_result_points(aas, hs)
+
+    home_points = _points_for(hs, aas)
+    away_points = _points_for(aas, hs)
+    home_strength_factor = float(np.clip(home_opp_elo / BASE_ELO, 0.75, 1.25))
+    away_strength_factor = float(np.clip(away_opp_elo / BASE_ELO, 0.75, 1.25))
+    home_strength_gd = (hs - aas) + float(np.clip((home_opp_elo - BASE_ELO) / 300.0, -1.0, 1.0))
+    away_strength_gd = (aas - hs) + float(np.clip((away_opp_elo - BASE_ELO) / 300.0, -1.0, 1.0))
+
+    home_state.recent_opponent_elo.append(home_opp_elo)
+    away_state.recent_opponent_elo.append(away_opp_elo)
+    home_state.recent_strength_points.append(home_points * home_strength_factor)
+    away_state.recent_strength_points.append(away_points * away_strength_factor)
+    home_state.recent_performance.append(actual_home - expected_home)
+    away_state.recent_performance.append(actual_away - expected_away)
+    home_state.recent_strength_goal_diff.append(home_strength_gd)
+    away_state.recent_strength_goal_diff.append(away_strength_gd)
 
     new_home_elo, new_away_elo = update_elo(home_state.elo, away_state.elo, hs, aas, neutral)
     home_state.elo = new_home_elo
@@ -221,8 +278,8 @@ def _update_states_after_match(states, h2h_records, home: str, away: str, hs: in
     home_state.matches += 1
     away_state.matches += 1
 
-    home_state.recent_points.append(_points_for(hs, aas))
-    away_state.recent_points.append(_points_for(aas, hs))
+    home_state.recent_points.append(home_points)
+    away_state.recent_points.append(away_points)
     home_state.recent_goal_diff.append(hs - aas)
     away_state.recent_goal_diff.append(aas - hs)
     home_state.recent_goals_for.append(hs)
@@ -234,10 +291,10 @@ def _update_states_after_match(states, h2h_records, home: str, away: str, hs: in
     team0 = pair_key[0]
     if home == team0:
         gd_team0 = hs - aas
-        points_team0 = _points_for(hs, aas)
+        points_team0 = home_points
     else:
         gd_team0 = aas - hs
-        points_team0 = _points_for(aas, hs)
+        points_team0 = away_points
     h2h_records[pair_key].append((gd_team0, points_team0))
 
 
@@ -259,6 +316,12 @@ def build_current_states(df: pd.DataFrame) -> tuple[dict[str, TeamState], dict[t
     return states, h2h_records
 
 
-def make_match_features(home: str, away: str, neutral: bool, states: dict[str, TeamState], h2h_records) -> pd.DataFrame:
+def make_match_features(
+    home: str,
+    away: str,
+    neutral: bool,
+    states: dict[str, TeamState],
+    h2h_records,
+) -> pd.DataFrame:
     row = _make_feature_row(home, away, neutral, states, h2h_records)
     return pd.DataFrame([row], columns=FEATURE_COLUMNS)

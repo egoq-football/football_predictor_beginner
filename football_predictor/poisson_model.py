@@ -14,7 +14,13 @@ def estimate_expected_goals(
     features: pd.DataFrame,
     fifa_points_diff: float = 0.0,
 ) -> tuple[float, float]:
-    """Estimate goals with the last five matches carrying the largest weight."""
+    """Estimate scoreline lambdas from both teams' scoring/conceding averages.
+
+    The most likely scores are intentionally separated from FIFA and Elo. For
+    each side the goal expectation is the arithmetic mean of: (1) that team's
+    recent goals scored and (2) the opponent's recent goals conceded. The last
+    five matches carry 75% of each average and the last ten carry 25%.
+    """
     row = features.iloc[0]
     neutral = bool(row["neutral"])
     base_goal_rate = 1.27
@@ -22,7 +28,6 @@ def estimate_expected_goals(
     home_reliability = min(float(row["home_matches"]) / 5.0, 1.0)
     away_reliability = min(float(row["away_matches"]) / 5.0, 1.0)
 
-    # 75% of the team-form input comes from the last five matches.
     home_gf_recent = float(row["home_gf_5"]) * 0.75 + float(row["home_gf_10"]) * 0.25
     home_ga_recent = float(row["home_ga_5"]) * 0.75 + float(row["home_ga_10"]) * 0.25
     away_gf_recent = float(row["away_gf_5"]) * 0.75 + float(row["away_gf_10"]) * 0.25
@@ -33,18 +38,41 @@ def estimate_expected_goals(
     away_gf = _blend(away_gf_recent, base_goal_rate, away_reliability)
     away_ga = _blend(away_ga_recent, base_goal_rate, away_reliability)
 
-    home_adv = 0.13 if not neutral else 0.0
-    away_penalty = -0.05 if not neutral else 0.0
-    elo_adj = float(np.clip(row["elo_diff_raw"], -350, 350)) / 950.0
-    fifa_adj = float(np.clip(fifa_points_diff, -550, 550)) / 1500.0
+    home_xg = (home_gf + away_ga) / 2.0
+    away_xg = (away_gf + home_ga) / 2.0
 
-    home_xg = (home_gf * 0.54 + away_ga * 0.46) + home_adv + elo_adj + fifa_adj
-    away_xg = (away_gf * 0.54 + home_ga * 0.46) + away_penalty - elo_adj * 0.76 - fifa_adj * 0.76
+    # A small venue correction is applied only when the match is not neutral.
+    if not neutral:
+        home_xg *= 1.06
+        away_xg *= 0.96
 
     home_xg = float(np.clip(home_xg, 0.16, 4.4))
     away_xg = float(np.clip(away_xg, 0.16, 4.4))
     return home_xg, away_xg
 
+
+
+
+def estimate_scoreline_goal_means(features: pd.DataFrame) -> tuple[float, float]:
+    """Goal means for the *scoreline* table only.
+
+    They are based on both teams' average scored and conceded goals with a
+    stronger weight on the last five matches.
+    """
+    row = features.iloc[0]
+    neutral = bool(row["neutral"])
+
+    home_scored = float(row["home_gf_5"]) * 0.65 + float(row["home_gf_10"]) * 0.35
+    home_conceded = float(row["home_ga_5"]) * 0.65 + float(row["home_ga_10"]) * 0.35
+    away_scored = float(row["away_gf_5"]) * 0.65 + float(row["away_gf_10"]) * 0.35
+    away_conceded = float(row["away_ga_5"]) * 0.65 + float(row["away_ga_10"]) * 0.35
+
+    home_lambda = (home_scored + away_conceded) / 2.0
+    away_lambda = (away_scored + home_conceded) / 2.0
+    if not neutral:
+        home_lambda *= 1.06
+        away_lambda *= 0.96
+    return float(np.clip(home_lambda, 0.16, 4.4)), float(np.clip(away_lambda, 0.16, 4.4))
 
 def poisson_probability(lmbda: float, goals: int) -> float:
     return exp(-lmbda) * (lmbda ** goals) / factorial(goals)
@@ -147,9 +175,6 @@ def market_probabilities(home_xg: float, away_xg: float, max_goals: int = 8) -> 
         "double_chance_no_draw": out["home_win"] + out["away_win"],
     })
 
-    # International football has historically produced slightly more goals in
-    # the second half. These fractions are used only to split the full-match xG;
-    # they do not invent corner/card data that is absent from the source.
     first = _matrix_markets(score_matrix(home_xg * 0.44, away_xg * 0.44, max_goals=5))
     second = _matrix_markets(score_matrix(home_xg * 0.56, away_xg * 0.56, max_goals=5))
     for key, value in first.items():
@@ -176,7 +201,6 @@ def most_likely_outcomes(
     markets: dict[str, float],
     top_scoreline: tuple[str, float],
 ) -> list[dict[str, object]]:
-    """Return one most likely selection from each supported market group."""
     away_win, draw, home_win = [float(x) for x in final_probs]
     rows = [
         _choose("Исход матча", [(f"Победа {home}", home_win), ("Ничья", draw), (f"Победа {away}", away_win)], "ансамбль"),
@@ -234,7 +258,7 @@ def most_likely_outcomes(
             "Категория": "Точный счёт",
             "Наиболее вероятный исход": top_scoreline[0],
             "Вероятность": float(top_scoreline[1]),
-            "Модель": "Пуассон",
+            "Модель": "Средние забитые/пропущенные + Пуассон",
         },
     ]
     return sorted(rows, key=lambda row: float(row["Вероятность"]), reverse=True)

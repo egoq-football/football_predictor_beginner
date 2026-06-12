@@ -69,6 +69,9 @@ def team_summary(
     ga_5 = list(state.recent_goals_against)[-5:]
     gf_10 = list(state.recent_goals_for)[-10:]
     ga_10 = list(state.recent_goals_against)[-10:]
+    opponent_elo_5 = list(state.recent_opponent_elo)[-5:]
+    strength_points_5 = list(state.recent_strength_points)[-5:]
+    performance_5 = list(state.recent_performance)[-5:]
 
     def avg(values, default=0.0):
         return sum(values) / len(values) if values else default
@@ -80,7 +83,7 @@ def team_summary(
         "Команда": team,
         "Рейтинг FIFA": fifa.rank if fifa else "нет данных",
         "Очки FIFA": round(float(fifa.points), 2) if fifa else "нет данных",
-        "Расчётный Elo с 2010": round(float(state.elo), 1),
+        "Внутренний рейтинг силы (Elo)": round(float(state.elo), 1),
         "Матчей с 2010": int(state.matches),
         "Очки/матч за 5": round(avg(points_5, 1.0), 2),
         "Очки/матч за 10": round(avg(points_10, 1.0), 2),
@@ -90,6 +93,9 @@ def team_summary(
         "Голы проп. за 5": round(avg(ga_5, 1.25), 2),
         "Голы заб. за 10": round(avg(gf_10, 1.25), 2),
         "Голы проп. за 10": round(avg(ga_10, 1.25), 2),
+        "Средняя сила соперников за 5": round(avg(opponent_elo_5, 1500.0), 1),
+        "Очки/матч за 5 с учётом силы соперников": round(avg(strength_points_5, 1.0), 2),
+        "Результат выше/ниже ожидания Elo за 5": round(avg(performance_5, 0.0), 3),
     }
 
 
