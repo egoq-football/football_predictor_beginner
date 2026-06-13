@@ -21,7 +21,7 @@ BACKTEST_PATH = MODELS_DIR / "backtest_metrics.csv"
 WORLD_CUP_BACKTEST_PATH = MODELS_DIR / "world_cup_backtest.csv"
 
 DATA_START_DATE = "2010-01-01"
-MODEL_VERSION = "4.0.0-world-cup-2026"
+MODEL_VERSION = "4.2.1-world-cup-2026"
 
 WORLD_CUP_TEAMS = {
     "A": ["Mexico", "South Africa", "South Korea", "Czech Republic"],
@@ -67,4 +67,5 @@ OPTIONAL_STATS_COLUMNS = [
     "home_possession", "away_possession",
     "home_ppda", "away_ppda",
     "home_ht_score", "away_ht_score",
+    "referee", "source", "source_match_id",
 ]

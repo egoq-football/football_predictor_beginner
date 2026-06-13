@@ -1,98 +1,135 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from pathlib import Path
 from uuid import uuid4
 
 import numpy as np
 import pandas as pd
 
-from .config import MODEL_BUNDLE_PATH
 from .context import MatchContext, infer_group_motivation
 from .data_loader import load_match_lineups, load_player_pool
 from .dixon_coles import score_markets
 from .features import SequentialFeatureBuilder, current_feature_frame
 from .fifa_rankings import FifaRankingHistory
-from .lineups import SquadAssessment, assess_squad
-from .model import WorldCupModelBundle, load_bundle
-from .optional_models import poisson_total_probability
+from .lineups import assess_squad
+from .market_selector import build_candidates, select_non_obvious_outcomes
+from .model import WorldCupModelBundle
+from .odds_provider import MarketSnapshot
 
 
-def _normalize_probs(probs: np.ndarray) -> np.ndarray:
-    probs = np.clip(np.asarray(probs, dtype=float), 1e-9, None)
-    return probs / probs.sum()
-
-
-def _most_likely_pair(label_a: str, p_a: float, label_b: str, p_b: float) -> tuple[str, float]:
-    return (label_a, float(p_a)) if p_a >= p_b else (label_b, float(p_b))
-
-
-def _outcomes_table(
-    home: str,
-    away: str,
-    final_probs: np.ndarray,
-    markets: dict,
-    halftime: dict | None,
-    second_half: dict | None,
-    corners: dict | None,
-    cards: dict | None,
-) -> list[dict]:
-    away_p, draw_p, home_p = map(float, final_probs)
-    rows: list[dict] = []
-
-    match_candidates = [(f"Победа {home}", home_p), ("Ничья", draw_p), (f"Победа {away}", away_p)]
-    match_label, match_prob = max(match_candidates, key=lambda x: x[1])
-    rows.append({"Категория": "Исход матча", "Наиболее вероятный исход": match_label, "Вероятность": match_prob, "Модель": "Калиброванный ансамбль"})
-
-    double_candidates = [
-        (f"{home} или ничья", home_p + draw_p),
-        (f"{away} или ничья", away_p + draw_p),
-        ("Без ничьей", home_p + away_p),
-    ]
-    label, prob = max(double_candidates, key=lambda x: x[1])
-    rows.append({"Категория": "Двойной шанс", "Наиболее вероятный исход": label, "Вероятность": prob, "Модель": "Калиброванный ансамбль"})
-
-    for threshold in [1.5, 2.5, 3.5]:
-        over = float(markets[f"over_{str(threshold).replace('.', '_')}"])
-        under = float(markets[f"under_{str(threshold).replace('.', '_')}"])
-        label, prob = _most_likely_pair(f"Тотал больше {str(threshold).replace('.', ',')}", over, f"Тотал меньше {str(threshold).replace('.', ',')}", under)
-        rows.append({"Категория": f"Тотал {str(threshold).replace('.', ',')}", "Наиболее вероятный исход": label, "Вероятность": prob, "Модель": "Dixon–Coles"})
-
-    label, prob = _most_likely_pair("Обе забьют — да", float(markets["btts_yes"]), "Обе забьют — нет", float(markets["btts_no"]))
-    rows.append({"Категория": "Обе забьют", "Наиболее вероятный исход": label, "Вероятность": prob, "Модель": "Dixon–Coles"})
-
-    top_score, top_score_p = markets["top_scorelines"][0]
-    rows.append({"Категория": "Точный счёт", "Наиболее вероятный исход": top_score, "Вероятность": float(top_score_p), "Модель": "Dixon–Coles"})
-
-    if halftime and halftime.get("available"):
-        candidates = [(f"Победа {home} в 1-м тайме", halftime["home_win"]), ("Ничья в 1-м тайме", halftime["draw"]), (f"Победа {away} в 1-м тайме", halftime["away_win"])]
-        label, prob = max(candidates, key=lambda x: x[1])
-        rows.append({"Категория": "Исход первого тайма", "Наиболее вероятный исход": label, "Вероятность": float(prob), "Модель": "Отдельная модель 1-го тайма"})
-    if second_half and second_half.get("available"):
-        candidates = [(f"Победа {home} во 2-м тайме", second_half["home_win"]), ("Ничья во 2-м тайме", second_half["draw"]), (f"Победа {away} во 2-м тайме", second_half["away_win"])]
-        label, prob = max(candidates, key=lambda x: x[1])
-        rows.append({"Категория": "Исход второго тайма", "Наиболее вероятный исход": label, "Вероятность": float(prob), "Модель": "Отдельная модель 2-го тайма"})
-    if corners and corners.get("available"):
-        label, prob = _most_likely_pair("Тотал угловых больше 8,5", corners["over_8_5"], "Тотал угловых меньше 8,5", corners["under_8_5"])
-        rows.append({"Категория": "Угловые 8,5", "Наиболее вероятный исход": label, "Вероятность": prob, "Модель": "Отдельная модель угловых"})
-    if cards and cards.get("available"):
-        label, prob = _most_likely_pair("Тотал жёлтых карточек больше 3,5", cards["over_3_5"], "Тотал жёлтых карточек меньше 3,5", cards["under_3_5"])
-        rows.append({"Категория": "Жёлтые карточки 3,5", "Наиболее вероятный исход": label, "Вероятность": prob, "Модель": "Отдельная модель карточек"})
-    return rows
-
-
-def _pair_poisson_markets(home_mean: float, away_mean: float, max_goals: int = 8) -> dict[str, float]:
+def _pair_poisson_markets(home_mean: float, away_mean: float, max_goals: int = 10) -> dict[str, float]:
     from math import factorial
+
     matrix = np.zeros((max_goals + 1, max_goals + 1), dtype=float)
     for i in range(max_goals + 1):
         for j in range(max_goals + 1):
-            matrix[i, j] = np.exp(-home_mean) * home_mean**i / factorial(i) * np.exp(-away_mean) * away_mean**j / factorial(j)
-    matrix /= matrix.sum()
+            matrix[i, j] = (
+                np.exp(-home_mean) * home_mean**i / factorial(i)
+                * np.exp(-away_mean) * away_mean**j / factorial(j)
+            )
+    total = matrix.sum()
+    matrix = matrix / total if total > 0 else matrix
     return {
         "away_win": float(np.triu(matrix, 1).sum()),
         "draw": float(np.trace(matrix)),
         "home_win": float(np.tril(matrix, -1).sum()),
     }
+
+
+def _market_summary_rows(
+    home: str,
+    away: str,
+    final_probs: np.ndarray,
+    markets: dict,
+    halftime: dict,
+    second_half: dict,
+    corners: dict,
+    cards: dict,
+) -> list[dict]:
+    away_p, draw_p, home_p = map(float, final_probs)
+    rows: list[dict] = []
+
+    label, probability = max(
+        [(f"Победа {home}", home_p), ("Ничья", draw_p), (f"Победа {away}", away_p)],
+        key=lambda item: item[1],
+    )
+    rows.append({"Категория": "Исход матча", "Наиболее вероятный исход": label, "Вероятность": probability, "Модель": "Калиброванный ансамбль"})
+
+    for line in (1.5, 2.5, 3.5, 4.5):
+        suffix = str(line).replace(".", "_")
+        over = float(markets[f"over_{suffix}"])
+        under = float(markets[f"under_{suffix}"])
+        label, probability = (
+            (f"Тотал больше {str(line).replace('.', ',')}", over)
+            if over >= under else
+            (f"Тотал меньше {str(line).replace('.', ',')}", under)
+        )
+        rows.append({"Категория": f"Тотал {str(line).replace('.', ',')}", "Наиболее вероятный исход": label, "Вероятность": probability, "Модель": "Dixon–Coles"})
+
+    btts_yes = float(markets["btts_yes"])
+    rows.append({
+        "Категория": "Обе забьют",
+        "Наиболее вероятный исход": "Обе забьют — да" if btts_yes >= 0.5 else "Обе забьют — нет",
+        "Вероятность": max(btts_yes, 1.0 - btts_yes),
+        "Модель": "Dixon–Coles",
+    })
+
+    top_score, top_probability = markets["top_scorelines"][0]
+    rows.append({"Категория": "Точный счёт", "Наиболее вероятный исход": top_score, "Вероятность": float(top_probability), "Модель": "Dixon–Coles"})
+
+    for category, section, labels in (
+        ("Исход первого тайма", halftime, (f"Победа {home} в первом тайме", "Ничья в первом тайме", f"Победа {away} в первом тайме")),
+        ("Исход второго тайма", second_half, (f"Победа {home} во втором тайме", "Ничья во втором тайме", f"Победа {away} во втором тайме")),
+    ):
+        if section.get("available"):
+            values = [(labels[0], section["home_win"]), (labels[1], section["draw"]), (labels[2], section["away_win"])]
+            label, probability = max(values, key=lambda item: item[1])
+            rows.append({"Категория": category, "Наиболее вероятный исход": label, "Вероятность": float(probability), "Модель": section.get("model_name", "Отдельная модель")})
+
+    if corners.get("available"):
+        values = [("Тотал угловых больше 8,5", corners["over_8_5"]), ("Тотал угловых меньше 8,5", corners["under_8_5"])]
+        label, probability = max(values, key=lambda item: item[1])
+        rows.append({"Категория": "Угловые 8,5", "Наиболее вероятный исход": label, "Вероятность": float(probability), "Модель": corners.get("model_name", "Модель угловых")})
+
+    if cards.get("available"):
+        values = [("Тотал жёлтых карточек больше 3,5", cards["over_3_5"]), ("Тотал жёлтых карточек меньше 3,5", cards["under_3_5"])]
+        label, probability = max(values, key=lambda item: item[1])
+        rows.append({"Категория": "Жёлтые карточки 3,5", "Наиболее вероятный исход": label, "Вероятность": float(probability), "Модель": cards.get("model_name", "Модель карточек")})
+    return rows
+
+
+def _optional_section(model, prediction, lines: tuple[float, ...], section_kind: str) -> dict:
+    if not prediction.available or prediction.home_mean is None or prediction.away_mean is None:
+        return {
+            "available": False,
+            "reason": prediction.reason,
+            "status": prediction.status,
+            "model_name": prediction.status.get("selected_algorithm", "") if prediction.status else "",
+        }
+
+    section = {
+        "available": True,
+        **_pair_poisson_markets(prediction.home_mean, prediction.away_mean),
+        "home_mean": float(prediction.home_mean),
+        "away_mean": float(prediction.away_mean),
+        "total_mean": float(prediction.home_mean + prediction.away_mean),
+        "status": prediction.status,
+        "model_name": prediction.status.get("selected_algorithm", "Отдельная модель") if prediction.status else "Отдельная модель",
+        "probability_fn": model.total_probability,
+    }
+    for line in lines:
+        suffix = str(line).replace(".", "_")
+        section[f"over_{suffix}"] = model.total_probability(section["total_mean"], line, True)
+        section[f"under_{suffix}"] = model.total_probability(section["total_mean"], line, False)
+    return section
+
+
+def _effect_label(value: float, weak: float, strong: float, positive_name: str, negative_name: str) -> tuple[str, str]:
+    magnitude = abs(value)
+    if magnitude < weak:
+        return "Нейтрально", "слабое"
+    direction = positive_name if value > 0 else negative_name
+    return direction, "сильное" if magnitude >= strong else "умеренное"
 
 
 def predict_world_cup_match(
@@ -109,16 +146,14 @@ def predict_world_cup_match(
     player_pool: pd.DataFrame | None = None,
     lineup_history: pd.DataFrame | None = None,
     data_source_notes: list[str] | None = None,
+    market_snapshot: MarketSnapshot | None = None,
 ) -> dict:
     context = infer_group_motivation(context)
     player_pool = player_pool if player_pool is not None else load_player_pool()
     lineup_history = lineup_history if lineup_history is not None else load_match_lineups()
-    home_squad = assess_squad(
-        player_pool, home, selected_home_players, lineup_history=lineup_history, match_date=match_date
-    )
-    away_squad = assess_squad(
-        player_pool, away, selected_away_players, lineup_history=lineup_history, match_date=match_date
-    )
+
+    home_squad = assess_squad(player_pool, home, selected_home_players, lineup_history=lineup_history, match_date=match_date)
+    away_squad = assess_squad(player_pool, away, selected_away_players, lineup_history=lineup_history, match_date=match_date)
     lineup_home = home_squad.relative_strength if home_squad.available else None
     lineup_away = away_squad.relative_strength if away_squad.available else None
 
@@ -127,46 +162,38 @@ def predict_world_cup_match(
         lineup_strength_home=lineup_home,
         lineup_strength_away=lineup_away,
     )
-    final_probs, components = bundle.predict(features, home, away, neutral)
+    final_probs, raw_components = bundle.predict(features, home, away, neutral)
+    components = {
+        name: {"away": float(values[0]), "draw": float(values[1]), "home": float(values[2])}
+        for name, values in raw_components.items()
+    }
+
     dc_prediction = bundle.dixon_coles.predict(home, away, neutral)
     markets = score_markets(dc_prediction)
 
-    ht_pred = bundle.optional_models.halftime.predict(features)
-    second_pred = bundle.optional_models.second_half.predict(features)
-    corners_pred = bundle.optional_models.corners.predict(features)
-    cards_pred = bundle.optional_models.cards.predict(features)
+    halftime_prediction = bundle.optional_models.halftime.predict(features)
+    second_prediction = bundle.optional_models.second_half.predict(features)
+    corners_prediction = bundle.optional_models.corners.predict(features)
+    cards_prediction = bundle.optional_models.cards.predict(features)
 
-    halftime = {"available": False, "reason": ht_pred.reason}
-    if ht_pred.available and ht_pred.home_mean is not None and ht_pred.away_mean is not None:
-        halftime = {"available": True, **_pair_poisson_markets(ht_pred.home_mean, ht_pred.away_mean), "home_mean": ht_pred.home_mean, "away_mean": ht_pred.away_mean}
+    halftime = _optional_section(bundle.optional_models.halftime, halftime_prediction, (0.5, 1.5, 2.5), "halftime")
+    second_half = _optional_section(bundle.optional_models.second_half, second_prediction, (0.5, 1.5, 2.5), "second_half")
+    corners = _optional_section(bundle.optional_models.corners, corners_prediction, (7.5, 8.5, 9.5, 10.5), "corners")
+    cards = _optional_section(bundle.optional_models.cards, cards_prediction, (2.5, 3.5, 4.5, 5.5), "cards")
 
-    second_half = {"available": False, "reason": second_pred.reason}
-    if second_pred.available and second_pred.home_mean is not None and second_pred.away_mean is not None:
-        second_half = {"available": True, **_pair_poisson_markets(second_pred.home_mean, second_pred.away_mean), "home_mean": second_pred.home_mean, "away_mean": second_pred.away_mean}
-
-    corners = {"available": False, "reason": corners_pred.reason}
-    if corners_pred.available and corners_pred.home_mean is not None and corners_pred.away_mean is not None:
-        mean_total = corners_pred.home_mean + corners_pred.away_mean
-        corners = {
-            "available": True,
-            "home_mean": corners_pred.home_mean,
-            "away_mean": corners_pred.away_mean,
-            "total_mean": mean_total,
-            "over_8_5": poisson_total_probability(mean_total, 8.5, True),
-            "under_8_5": poisson_total_probability(mean_total, 8.5, False),
-        }
-
-    cards = {"available": False, "reason": cards_pred.reason}
-    if cards_pred.available and cards_pred.home_mean is not None and cards_pred.away_mean is not None:
-        mean_total = cards_pred.home_mean + cards_pred.away_mean
-        cards = {
-            "available": True,
-            "home_mean": cards_pred.home_mean,
-            "away_mean": cards_pred.away_mean,
-            "total_mean": mean_total,
-            "over_3_5": poisson_total_probability(mean_total, 3.5, True),
-            "under_3_5": poisson_total_probability(mean_total, 3.5, False),
-        }
+    row = features.iloc[0]
+    feature_dict = row.to_dict()
+    candidates = build_candidates(
+        home, away, final_probs, components, markets, halftime, second_half, corners, cards,
+        feature_dict, context.lineups_known,
+    )
+    non_obvious = select_non_obvious_outcomes(
+        candidates, market_snapshot, feature_dict, selector_model=bundle.outcome_selector
+    )
+    # Bound callables are only needed during selection and must not leak into the
+    # Streamlit session/journal payload.
+    for section in (halftime, second_half, corners, cards):
+        section.pop("probability_fn", None)
 
     current_home_fifa = fifa.current_lookup(home)
     current_away_fifa = fifa.current_lookup(away)
@@ -174,107 +201,108 @@ def predict_world_cup_match(
     headline_parts: list[str] = []
 
     if current_home_fifa and current_away_fifa:
-        gap = current_home_fifa.points - current_away_fifa.points
-        gap_abs = abs(gap)
-        leader = home if gap > 0 else away
-        if gap_abs < 25:
-            scale = "почти равные позиции"
-        elif gap_abs < 75:
-            scale = "небольшое преимущество"
-        elif gap_abs < 150:
-            scale = "заметное преимущество"
-        else:
-            scale = "очень большое преимущество"
+        gap = float(current_home_fifa.points - current_away_fifa.points)
+        direction, strength = _effect_label(gap, 25, 120, home, away)
         explanation_rows.append({
             "Фактор": "Рейтинг FIFA",
-            "Преимущество": leader if gap_abs >= 10 else "Практически равны",
-            "Оценка": f"{scale}: {gap_abs:.1f} очка",
-            "Детали": (
-                f"{home}: {current_home_fifa.rank or '—'} место, {current_home_fifa.points:.2f}; "
-                f"{away}: {current_away_fifa.rank or '—'} место, {current_away_fifa.points:.2f}."
+            "Направление": direction,
+            "Сила влияния": strength,
+            "Что увидела модель": (
+                f"{home}: {current_home_fifa.rank or '—'} место и {current_home_fifa.points:.2f} очка; "
+                f"{away}: {current_away_fifa.rank or '—'} место и {current_away_fifa.points:.2f} очка. "
+                f"Разница {abs(gap):.1f} очка."
             ),
         })
-        if gap_abs >= 75:
-            headline_parts.append(f"рейтинг FIFA заметно в пользу {leader}")
+        if abs(gap) >= 75:
+            headline_parts.append(f"рейтинг FIFA в пользу {direction}")
 
-    row = features.iloc[0]
-    opp_gap = float(row.get("opponent_elo_diff_5", 0.0))
-    opp_leader = home if opp_gap > 0 else away
+    opponent_gap = float(row.get("opponent_elo_diff_5", 0.0))
+    direction, strength = _effect_label(opponent_gap, 15, 70, home, away)
     explanation_rows.append({
-        "Фактор": "Сила последних соперников",
-        "Преимущество": opp_leader if abs(opp_gap) >= 15 else "Сопоставимый уровень",
-        "Оценка": f"Разница среднего Elo соперников: {abs(opp_gap):.1f}",
-        "Детали": "Последние пять матчей оцениваются с поправкой на силу каждого соперника, место проведения и результат выше или ниже ожидания.",
+        "Фактор": "Уровень последних соперников",
+        "Направление": direction,
+        "Сила влияния": strength,
+        "Что увидела модель": (
+            f"Разница среднего Elo соперников за последние пять матчей — {abs(opponent_gap):.1f}. "
+            "Результаты против сильных соперников ценятся выше, чем такие же результаты против слабых."
+        ),
     })
 
     form_gap = float(row.get("adjusted_form_diff_5", 0.0))
-    form_leader = home if form_gap > 0 else away
+    direction, strength = _effect_label(form_gap, 0.08, 0.30, home, away)
     explanation_rows.append({
-        "Фактор": "Скорректированная форма",
-        "Преимущество": form_leader if abs(form_gap) >= 0.08 else "Форма близкая",
-        "Оценка": f"Разница: {abs(form_gap):.2f} условного очка за матч",
-        "Детали": "Учитываются пять последних игр, но победа над сильным соперником ценится выше победы над слабым.",
+        "Фактор": "Форма последних пяти матчей",
+        "Направление": direction,
+        "Сила влияния": strength,
+        "Что увидела модель": (
+            f"Разница скорректированной формы — {abs(form_gap):.2f} условного очка за матч. "
+            "Учтены место проведения, сила соперника и результат выше либо ниже ожидания."
+        ),
     })
     if abs(form_gap) >= 0.18:
-        headline_parts.append(f"текущая форма лучше у {form_leader}")
+        headline_parts.append(f"скорректированная форма лучше у {direction}")
 
-    dc_edge = dc_prediction.home_lambda - dc_prediction.away_lambda
-    goal_leader = home if dc_edge > 0 else away
+    goal_edge = float(dc_prediction.home_lambda - dc_prediction.away_lambda)
+    direction, strength = _effect_label(goal_edge, 0.12, 0.65, home, away)
     explanation_rows.append({
-        "Фактор": "Модель голов Dixon–Coles",
-        "Преимущество": goal_leader if abs(dc_edge) >= 0.12 else "Ожидаемые голы близки",
-        "Оценка": f"{home} {dc_prediction.home_lambda:.2f} — {dc_prediction.away_lambda:.2f} {away}",
-        "Детали": "Ожидаемые голы построены по атаке и обороне обеих команд; отдельно скорректированы низкие счета 0:0, 1:0, 0:1 и 1:1.",
+        "Фактор": "Dixon–Coles и ожидаемые голы",
+        "Направление": direction,
+        "Сила влияния": strength,
+        "Что увидела модель": (
+            f"Ожидаемые голы: {home} {dc_prediction.home_lambda:.2f} — {dc_prediction.away_lambda:.2f} {away}. "
+            "Модель учитывает атаку и оборону обеих команд и корректирует низкие счета."
+        ),
     })
 
-    tournament_details = []
+    context_notes: list[str] = []
     if context.stage == "group":
-        tournament_details.append(
-            f"Перед матчем: {home} — {context.home_points} очков и разница {context.home_goal_difference:+d}; "
-            f"{away} — {context.away_points} очков и разница {context.away_goal_difference:+d}."
+        context_notes.append(
+            f"Перед матчем: {home} — {context.home_points} очков, разница {context.home_goal_difference:+d}; "
+            f"{away} — {context.away_points} очков, разница {context.away_goal_difference:+d}."
         )
         if context.home_must_win:
-            tournament_details.append(f"Для {home} победа имеет повышенную турнирную ценность.")
+            context_notes.append(f"Для {home} победа особенно важна.")
         if context.away_must_win:
-            tournament_details.append(f"Для {away} победа имеет повышенную турнирную ценность.")
+            context_notes.append(f"Для {away} победа особенно важна.")
         if context.home_draw_enough:
-            tournament_details.append(f"{home} может устраивать ничья.")
+            context_notes.append(f"{home} может устраивать ничья.")
         if context.away_draw_enough:
-            tournament_details.append(f"{away} может устраивать ничья.")
+            context_notes.append(f"{away} может устраивать ничья.")
     else:
-        tournament_details.append("Это матч плей-офф: отдельно оцениваются ничья после 90 минут, дополнительное время и итоговый проход.")
+        context_notes.append("Плей-офф: отдельно рассчитаны 90 минут, дополнительное время и итоговый проход.")
     explanation_rows.append({
         "Фактор": "Турнирная ситуация",
-        "Преимущество": "Автоматически учтена",
-        "Оценка": "Контекст ЧМ-2026",
-        "Детали": " ".join(tournament_details),
+        "Направление": "Учтена автоматически",
+        "Сила влияния": "зависит от таблицы",
+        "Что увидела модель": " ".join(context_notes),
     })
 
-    lineup_detail = f"{home}: {home_squad.explanation} {away}: {away_squad.explanation}"
     explanation_rows.append({
         "Фактор": "Стартовые составы",
-        "Преимущество": "Учтены" if context.lineups_known else "Ещё не опубликованы",
-        "Оценка": "Автоматическая загрузка",
-        "Детали": lineup_detail,
+        "Направление": "Учтены" if context.lineups_known else "Без поправки",
+        "Сила влияния": "умеренное" if context.lineups_known else "нет данных",
+        "Что увидела модель": f"{home}: {home_squad.explanation} {away}: {away_squad.explanation}",
     })
 
     notes = data_source_notes or []
     explanation_rows.append({
-        "Фактор": "Актуальность данных",
-        "Преимущество": "Автоматическое обновление",
-        "Оценка": f"Источников/проверок: {max(len(notes), 1)}",
-        "Детали": " ".join(notes) if notes else "Использованы последние доступные матчи, рейтинг FIFA и локальный снимок календаря.",
+        "Фактор": "Качество и актуальность данных",
+        "Направление": "Проверено автоматически",
+        "Сила влияния": "ограничивает уверенность",
+        "Что увидела модель": " ".join(notes) if notes else "Использованы последние доступные результаты и рейтинги.",
     })
 
-    leader_idx = int(np.argmax(final_probs))
-    leader_text = [away, "ничья", home][leader_idx]
-    if leader_text == "ничья":
-        summary = "Итоговый ансамбль считает ничью наиболее вероятным отдельным исходом."
-    else:
-        summary = f"Итоговый ансамбль отдаёт преимущество команде {leader_text}."
+    leader_index = int(np.argmax(final_probs))
+    leader = [away, "ничья", home][leader_index]
+    summary = (
+        "Ничья является наиболее вероятным отдельным исходом по итоговому ансамблю."
+        if leader == "ничья" else
+        f"Итоговый ансамбль отдаёт преимущество команде {leader}."
+    )
     if headline_parts:
-        summary += " Основные причины: " + "; ".join(headline_parts) + "."
-    explanations = [summary] + [f"{item['Фактор']}: {item['Детали']}" for item in explanation_rows]
+        summary += " Наиболее заметные факторы: " + "; ".join(headline_parts) + "."
+    if non_obvious.get("found"):
+        summary += f" Отдельно найден неочевидный исход: {non_obvious['best']['Исход']}."
 
     progression = None
     if context.stage == "knockout":
@@ -282,12 +310,14 @@ def predict_world_cup_match(
         strength_edge = float(row["elo_diff"] + row["fifa_points_diff"] * 0.35)
         home_conditional = 1.0 / (1.0 + np.exp(-strength_edge / 170.0))
         home_advance = float(final_probs[2] + draw_90 * home_conditional)
-        away_advance = 1.0 - home_advance
         progression = {
             "home_advance": home_advance,
-            "away_advance": away_advance,
+            "away_advance": 1.0 - home_advance,
             "extra_time_probability": draw_90,
         }
+
+    optional_status = bundle.optional_models.status_rows()
+    outcomes = _market_summary_rows(home, away, final_probs, markets, halftime, second_half, corners, cards)
 
     return {
         "prediction_id": str(uuid4()),
@@ -299,18 +329,20 @@ def predict_world_cup_match(
         "prob_away_win": float(final_probs[0]),
         "prob_draw": float(final_probs[1]),
         "prob_home_win": float(final_probs[2]),
-        "expected_goals_home": dc_prediction.home_lambda,
-        "expected_goals_away": dc_prediction.away_lambda,
+        "expected_goals_home": float(dc_prediction.home_lambda),
+        "expected_goals_away": float(dc_prediction.away_lambda),
         "markets": markets,
         "halftime": halftime,
         "second_half": second_half,
         "corners": corners,
         "cards": cards,
+        "optional_model_status": optional_status,
+        "non_obvious_selection": non_obvious,
         "progression": progression,
-        "components": {name: {"away": float(p[0]), "draw": float(p[1]), "home": float(p[2])} for name, p in components.items()},
-        "outcomes": _outcomes_table(home, away, final_probs, markets, halftime, second_half, corners, cards),
-        "features": row.to_dict(),
-        "explanations": explanations,
+        "components": components,
+        "outcomes": outcomes,
+        "features": feature_dict,
+        "explanations": [summary] + [row["Что увидела модель"] for row in explanation_rows],
         "explanation_rows": explanation_rows,
         "summary": summary,
         "home_squad": asdict(home_squad),

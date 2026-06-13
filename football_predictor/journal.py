@@ -17,6 +17,7 @@ LOG_COLUMNS = [
     "stage", "group_name", "group_round", "model_version",
     "prob_home", "prob_draw", "prob_away",
     "expected_home_goals", "expected_away_goals", "lineups_known",
+    "best_non_obvious_outcome", "best_non_obvious_probability", "best_non_obvious_confidence",
     "actual_home_score", "actual_away_score", "status",
 ]
 
@@ -39,6 +40,18 @@ def prediction_to_row(prediction: dict[str, Any]) -> dict[str, Any]:
         "expected_home_goals": prediction["expected_goals_home"],
         "expected_away_goals": prediction["expected_goals_away"],
         "lineups_known": context.get("lineups_known", False),
+        "best_non_obvious_outcome": (
+            (prediction.get("non_obvious_selection") or {}).get("best", {}).get("Исход", "")
+            if (prediction.get("non_obvious_selection") or {}).get("found") else ""
+        ),
+        "best_non_obvious_probability": (
+            (prediction.get("non_obvious_selection") or {}).get("best", {}).get("Вероятность", "")
+            if (prediction.get("non_obvious_selection") or {}).get("found") else ""
+        ),
+        "best_non_obvious_confidence": (
+            (prediction.get("non_obvious_selection") or {}).get("best", {}).get("Уверенность", "")
+            if (prediction.get("non_obvious_selection") or {}).get("found") else ""
+        ),
         "actual_home_score": "",
         "actual_away_score": "",
         "status": "open",

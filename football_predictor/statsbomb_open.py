@@ -12,7 +12,7 @@ from .config import ENRICHED_STATS_PATH, MATCH_LINEUPS_PATH, PLAYER_POOL_PATH
 from .data_loader import normalize_team_name
 
 BASE = "https://raw.githubusercontent.com/statsbomb/open-data/master/data"
-HEADERS = {"User-Agent": "world-cup-2026-predictor/4.1"}
+HEADERS = {"User-Agent": "world-cup-2026-predictor/4.2"}
 
 
 def _get_json(url: str, timeout: int = 45) -> Any:
@@ -112,6 +112,7 @@ def _parse_events(match: dict[str, Any], events: list[dict[str, Any]]) -> dict[s
         "away_ppda": np.nan,
         "home_ht_score": ht[home],
         "away_ht_score": ht[away],
+        "referee": "",
         "source": "StatsBomb Open Data",
         "source_match_id": str(match.get("match_id") or ""),
     }
@@ -157,14 +158,25 @@ def update_statsbomb_open_data(
     players_path: str | Path = PLAYER_POOL_PATH,
     max_new_matches: int = 160,
 ) -> dict[str, int]:
-    """Download only open StatsBomb World Cup data and merge it into local CSV files."""
+    """Download suitable open international StatsBomb data and merge it locally.
+
+    The collector includes men's World Cups and other open international
+    competitions from 2010 onward so the specialist half/corner/card models can
+    reach a useful sample without fabricating missing values.
+    """
     competitions = _get_json(f"{BASE}/competitions.json")
     selected = []
     for item in competitions:
         name = str(item.get("competition_name") or "")
         gender = str(item.get("competition_gender") or "").lower()
         season_name = str(item.get("season_name") or "")
-        if "world cup" in name.lower() and gender in {"male", "men", ""}:
+        lower_name = name.lower()
+        international = bool(item.get("competition_international", False))
+        allowed = any(token in lower_name for token in (
+            "world cup", "uefa euro", "copa america", "copa américa",
+            "africa cup", "afcon", "asian cup", "gold cup",
+        ))
+        if allowed and international and gender in {"male", "men", ""}:
             try:
                 year = int(season_name[:4])
             except Exception:
@@ -204,9 +216,20 @@ def update_statsbomb_open_data(
 
     if stats_rows:
         new_stats = pd.DataFrame(stats_rows)
-        merged = pd.concat([existing, new_stats], ignore_index=True)
-        keys = [c for c in ["date", "home_team", "away_team"] if c in merged.columns]
-        merged = merged.drop_duplicates(keys, keep="last") if keys else merged
+        all_columns = list(dict.fromkeys(list(existing.columns) + list(new_stats.columns)))
+        combined = pd.concat([
+            existing.reindex(columns=all_columns), new_stats.reindex(columns=all_columns)
+        ], ignore_index=True)
+        keys = ["date", "home_team", "away_team"]
+        merged_rows = []
+        for _, group in combined.groupby(keys, dropna=False, sort=False):
+            row = group.iloc[0].copy()
+            for column in all_columns:
+                values = group[column].dropna()
+                if not values.empty:
+                    row[column] = values.iloc[-1]
+            merged_rows.append(row)
+        merged = pd.DataFrame(merged_rows, columns=all_columns)
         Path(enriched_path).parent.mkdir(parents=True, exist_ok=True)
         merged.to_csv(enriched_path, index=False)
 

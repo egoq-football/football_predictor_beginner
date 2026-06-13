@@ -174,12 +174,24 @@ def score_markets(prediction: DixonColesPrediction) -> dict[str, float | list[tu
     btts = np.fromfunction(lambda i, j: (i > 0) & (j > 0), matrix.shape).astype(bool)
     markets: dict[str, float | list[tuple[str, float]]] = {
         "home_win": float(np.tril(matrix, -1).sum()), "draw": float(np.trace(matrix)), "away_win": float(np.triu(matrix, 1).sum()),
-        "over_0_5": float(matrix[total > 0.5].sum()), "over_1_5": float(matrix[total > 1.5].sum()), "under_1_5": float(matrix[total < 1.5].sum()),
+        "over_0_5": float(matrix[total > 0.5].sum()),
+        "over_1_5": float(matrix[total > 1.5].sum()), "under_1_5": float(matrix[total < 1.5].sum()),
         "over_2_5": float(matrix[total > 2.5].sum()), "under_2_5": float(matrix[total < 2.5].sum()),
         "over_3_5": float(matrix[total > 3.5].sum()), "under_3_5": float(matrix[total < 3.5].sum()),
+        "over_4_5": float(matrix[total > 4.5].sum()), "under_4_5": float(matrix[total < 4.5].sum()),
         "btts_yes": float(matrix[btts].sum()), "btts_no": float(matrix[~btts].sum()),
         "home_clean_sheet": float(matrix[:, 0].sum()), "away_clean_sheet": float(matrix[0, :].sum()),
     }
+    home_goal_probs = matrix.sum(axis=1)
+    away_goal_probs = matrix.sum(axis=0)
+    home_goal_values = np.arange(matrix.shape[0], dtype=float)
+    away_goal_values = np.arange(matrix.shape[1], dtype=float)
+    for line in (0.5, 1.5, 2.5, 3.5):
+        suffix = str(line).replace(".", "_")
+        markets[f"home_over_{suffix}"] = float(home_goal_probs[home_goal_values > line].sum())
+        markets[f"home_under_{suffix}"] = float(home_goal_probs[home_goal_values < line].sum())
+        markets[f"away_over_{suffix}"] = float(away_goal_probs[away_goal_values > line].sum())
+        markets[f"away_under_{suffix}"] = float(away_goal_probs[away_goal_values < line].sum())
     scores = [(f"{i}:{j}", float(matrix[i, j])) for i in range(max_goals + 1) for j in range(max_goals + 1)]
     markets["top_scorelines"] = sorted(scores, key=lambda x: x[1], reverse=True)[:12]
     return markets

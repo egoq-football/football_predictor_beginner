@@ -1,19 +1,30 @@
-WORLD CUP 2026 PREDICTOR v4.1
+WORLD CUP 2026 PREDICTOR v4.2.1
 
-1. Upload all files from this folder to the root of your GitHub repository.
-2. Wait for Streamlit to redeploy app.py.
-3. Create a free football-data.org token.
-4. In Streamlit Cloud -> Manage app -> Settings -> Secrets add:
+1. Upload ALL files to the root of your GitHub repository.
+   Include hidden folders: .github and .streamlit
+2. Commit changes.
+3. Streamlit Cloud -> Manage app -> Reboot app.
+4. Streamlit Secrets:
 
 [data_sources]
-football_data_api_key = "YOUR_TOKEN"
+football_data_api_key = "YOUR_FOOTBALL_DATA_TOKEN"
+odds_api_key = "OPTIONAL_THE_ODDS_API_KEY"
 
-5. In GitHub repository -> Settings -> Secrets and variables -> Actions add:
-FOOTBALL_DATA_API_KEY = your token
+5. GitHub -> Settings -> Secrets and variables -> Actions:
+FOOTBALL_DATA_API_KEY = your football-data.org token
+
+6. GitHub -> Settings -> Actions -> General:
+Enable Read and write permissions.
+
+7. GitHub -> Actions -> run manually:
+- Update data and retrain model
+- Refresh World Cup lineups and live context
 
 HOW TO USE
-- Select a real World Cup 2026 fixture.
+- Select a World Cup 2026 fixture.
 - Click "Сделать прогноз".
-- Do not enter date, round, points, goal difference or lineups manually.
-- If lineups are not published yet, the prediction is calculated without them.
-- Reopen the same match after lineups are published to get the lineup-adjusted prediction.
+- No manual date, group round, points, goal difference or lineup input is needed.
+- Recalculate after official lineups are published.
+- Optional models activate automatically only after data and chronological validation are sufficient.
+- The best non-obvious outcome is ranked by a trained historical selector.
+- Odds are never displayed.

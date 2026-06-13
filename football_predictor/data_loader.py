@@ -146,9 +146,15 @@ def load_optional_stats(path: str | Path = ENRICHED_STATS_PATH) -> pd.DataFrame:
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["home_team"] = df["home_team"].map(normalize_team_name)
     df["away_team"] = df["away_team"].map(normalize_team_name)
-    numeric = [c for c in OPTIONAL_STATS_COLUMNS if c not in {"date", "home_team", "away_team"}]
+    numeric = [
+        c for c in OPTIONAL_STATS_COLUMNS
+        if c not in {"date", "home_team", "away_team", "referee", "source", "source_match_id"}
+    ]
     for col in numeric:
         df[col] = pd.to_numeric(df[col], errors="coerce")
+    for col in ["referee", "source", "source_match_id"]:
+        if col in df.columns:
+            df[col] = df[col].fillna("").astype(str)
     return df.dropna(subset=["date", "home_team", "away_team"]).sort_values("date")
 
 
@@ -200,15 +206,32 @@ def data_coverage(results: pd.DataFrame, optional: pd.DataFrame, player_pool: pd
         "results_to": results["date"].max().date().isoformat(),
         "optional_matches": len(optional),
         "players": len(player_pool),
+        "optional_last_date": "",
+        "sources": "",
     }
     if optional.empty:
-        coverage.update({"xg_coverage": 0.0, "corners_coverage": 0.0, "cards_coverage": 0.0, "halftime_coverage": 0.0})
-    else:
-        n = max(len(optional), 1)
         coverage.update({
-            "xg_coverage": float(optional[["home_xg", "away_xg"]].notna().all(axis=1).sum() / n),
-            "corners_coverage": float(optional[["home_corners", "away_corners"]].notna().all(axis=1).sum() / n),
-            "cards_coverage": float(optional[["home_yellow_cards", "away_yellow_cards"]].notna().all(axis=1).sum() / n),
-            "halftime_coverage": float(optional[["home_ht_score", "away_ht_score"]].notna().all(axis=1).sum() / n),
+            "xg_rows": 0, "corners_rows": 0, "cards_rows": 0, "halftime_rows": 0,
+            "xg_coverage": 0.0, "corners_coverage": 0.0, "cards_coverage": 0.0, "halftime_coverage": 0.0,
         })
+        return coverage
+
+    n = max(len(optional), 1)
+    counts = {
+        "xg_rows": int(optional[["home_xg", "away_xg"]].notna().all(axis=1).sum()),
+        "corners_rows": int(optional[["home_corners", "away_corners"]].notna().all(axis=1).sum()),
+        "cards_rows": int(optional[["home_yellow_cards", "away_yellow_cards"]].notna().all(axis=1).sum()),
+        "halftime_rows": int(optional[["home_ht_score", "away_ht_score"]].notna().all(axis=1).sum()),
+    }
+    coverage.update(counts)
+    coverage.update({
+        "xg_coverage": counts["xg_rows"] / n,
+        "corners_coverage": counts["corners_rows"] / n,
+        "cards_coverage": counts["cards_rows"] / n,
+        "halftime_coverage": counts["halftime_rows"] / n,
+        "optional_last_date": pd.to_datetime(optional["date"], errors="coerce").max().date().isoformat()
+        if optional["date"].notna().any() else "",
+        "sources": ", ".join(sorted({x for x in optional.get("source", pd.Series(dtype=str)).astype(str) if x and x != "nan"})),
+    })
     return coverage
+

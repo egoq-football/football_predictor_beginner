@@ -17,6 +17,7 @@ from .dixon_coles import DixonColesModel
 from .elo import three_way_probabilities
 from .features import FEATURE_COLUMNS, fifa_probabilities, recent_form_probabilities
 from .optional_models import OptionalMarketModels
+from .outcome_selector import OutcomeSelectorModel, build_historical_selector_frame
 
 
 EPS = 1e-9
@@ -85,6 +86,7 @@ class WorldCupModelBundle:
     calibrator: TemperatureScaler = field(default_factory=TemperatureScaler)
     dixon_coles: DixonColesModel = field(default_factory=DixonColesModel)
     optional_models: OptionalMarketModels = field(default_factory=OptionalMarketModels)
+    outcome_selector: OutcomeSelectorModel = field(default_factory=OutcomeSelectorModel)
     metrics: list[dict] = field(default_factory=list)
     train_end_date: str = ""
     training_matches: int = 0
@@ -234,6 +236,12 @@ def train_bundle(table: pd.DataFrame) -> WorldCupModelBundle:
     home_baseline = np.tile(np.array([0.18, 0.25, 0.57]), (len(test), 1))
     metrics.append(_metric("Всегда первая команда", y_test, home_baseline))
 
+    # Train the non-obvious-outcome selector only on genuinely out-of-sample
+    # candidate predictions from the final chronological holdout. Its internal
+    # train/calibration/validation split is chronological by match.
+    selector_frame = build_historical_selector_frame(test, final_probs, test_parts, dc_eval)
+    outcome_selector = OutcomeSelectorModel().fit(selector_frame)
+
     # Refit deployable base models on all completed data.
     ml_final = _new_ml_model()
     _fit_ml(ml_final, table)
@@ -247,6 +255,7 @@ def train_bundle(table: pd.DataFrame) -> WorldCupModelBundle:
         calibrator=calibrator,
         dixon_coles=dc_final,
         optional_models=optional_models,
+        outcome_selector=outcome_selector,
         metrics=metrics,
         train_end_date=pd.Timestamp(table["date"].max()).date().isoformat(),
         training_matches=len(table),
