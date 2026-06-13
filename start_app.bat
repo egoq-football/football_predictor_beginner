@@ -1,5 +1,9 @@
 @echo off
 cd /d "%~dp0"
+if not exist .venv\Scripts\python.exe (
+  py -m venv .venv
+)
 call .venv\Scripts\activate
-streamlit run app.py --server.address 0.0.0.0
+python -m pip install -r requirements.txt
+streamlit run app.py
 pause

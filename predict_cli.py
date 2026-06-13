@@ -1,26 +1,44 @@
-from football_predictor.fifa_ranking import load_fifa_rankings, ranking_lookup
-from football_predictor.predict import prepare_model, predict_match
+from __future__ import annotations
 
-print("Готовлю модель...")
-df, model, states, h2h, teams = prepare_model()
-fifa_lookup = ranking_lookup(load_fifa_rankings())
+import argparse
+from datetime import date
 
-home = input("Первая команда, например Mexico: ").strip()
-away = input("Вторая команда, например South Africa: ").strip()
-neutral_text = input("Нейтральное поле? да/нет: ").strip().lower()
-neutral = neutral_text in {"да", "yes", "y", "true", "1"}
+from football_predictor.context import MatchContext
+from football_predictor.prediction import predict_world_cup_match
+from football_predictor.training import load_runtime
 
-result = predict_match(home, away, neutral, model, states, h2h, fifa_lookup=fifa_lookup, df=df)
 
-print("\n=== ПРОГНОЗ ===")
-print(f"{home} — {away}")
-print(f"Победа {home}: {result['prob_home_win'] * 100:.1f}%")
-print(f"Ничья: {result['prob_draw'] * 100:.1f}%")
-print(f"Победа {away}: {result['prob_away_win'] * 100:.1f}%")
-print(f"Ожидаемые голы: {home} {result['expected_goals_home']:.2f} — {result['expected_goals_away']:.2f} {away}")
-print("Вероятные счета:")
-for score, prob in result["top_scorelines"][:8]:
-    print(f"  {score}: {prob * 100:.1f}%")
-print("\nНаиболее вероятные исходы:")
-for row in result["most_likely_outcomes"]:
-    print(f"  {row['Категория']}: {row['Наиболее вероятный исход']} — {row['Вероятность'] * 100:.1f}%")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Прогноз матча ЧМ-2026")
+    parser.add_argument("home", help="Первая команда, например United States")
+    parser.add_argument("away", help="Вторая команда, например Paraguay")
+    parser.add_argument("--date", default=date.today().isoformat(), help="Дата YYYY-MM-DD")
+    parser.add_argument("--knockout", action="store_true", help="Матч плей-офф")
+    parser.add_argument("--not-neutral", action="store_true", help="Первая команда играет дома")
+    args = parser.parse_args()
+
+    _, fifa, bundle, builder = load_runtime()
+    context = MatchContext(stage="knockout" if args.knockout else "group", extra_time_possible=args.knockout)
+    result = predict_world_cup_match(
+        bundle=bundle,
+        builder=builder,
+        fifa=fifa,
+        home=args.home,
+        away=args.away,
+        match_date=args.date,
+        neutral=not args.not_neutral,
+        context=context,
+        manual_home_strength=1.0,
+        manual_away_strength=1.0,
+    )
+    print(f"{args.home}: {result['prob_home_win']:.1%}")
+    print(f"Ничья: {result['prob_draw']:.1%}")
+    print(f"{args.away}: {result['prob_away_win']:.1%}")
+    print(f"Ожидаемые голы: {result['expected_goals_home']:.2f} — {result['expected_goals_away']:.2f}")
+    print("Вероятные счета:")
+    for score, prob in result["markets"]["top_scorelines"][:5]:
+        print(f"  {score}: {prob:.1%}")
+
+
+if __name__ == "__main__":
+    main()

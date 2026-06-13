@@ -1,0 +1,1 @@
+prediction_id,created_at_utc,match_date,home_team,away_team,stage,group_name,group_round,model_version,prob_home,prob_draw,prob_away,expected_home_goals,expected_away_goals,lineups_known,actual_home_score,actual_away_score,status

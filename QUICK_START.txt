@@ -1,0 +1,14 @@
+БЫСТРОЕ ОБНОВЛЕНИЕ САЙТА
+
+1. Распакуй football_predictor_v4.zip.
+2. Открой папку football_predictor_v4.
+3. На GitHub открой egoq-football/football_predictor_beginner.
+4. Нажми Add file -> Upload files.
+5. Перетащи ВСЁ содержимое папки football_predictor_v4.
+6. Нажми Commit changes.
+7. Подожди пересборку Streamlit.
+8. Открой сайт и нажми «Обновить рейтинг FIFA».
+9. На GitHub открой Actions -> Update data and retrain model -> Run workflow.
+
+Главный файл Streamlit: app.py
+Полная инструкция: README.md

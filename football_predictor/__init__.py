@@ -1,1 +1,3 @@
-__version__ = "0.1.0"
+from .config import MODEL_VERSION
+
+__all__ = ["MODEL_VERSION"]
