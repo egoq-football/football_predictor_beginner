@@ -165,6 +165,8 @@ class SequentialFeatureBuilder:
         hs = self.states[home]
         as_ = self.states[away]
         date = pd.Timestamp(match_date)
+        if date.tzinfo is not None:
+            date = date.tz_convert("UTC").tz_localize(None)
         home_adv = 0.0 if neutral else HOME_ADVANTAGE
         elo_diff = hs.elo + home_adv - as_.elo
 

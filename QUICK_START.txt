@@ -1,14 +1,19 @@
-БЫСТРОЕ ОБНОВЛЕНИЕ САЙТА
+WORLD CUP 2026 PREDICTOR v4.1
 
-1. Распакуй football_predictor_v4.zip.
-2. Открой папку football_predictor_v4.
-3. На GitHub открой egoq-football/football_predictor_beginner.
-4. Нажми Add file -> Upload files.
-5. Перетащи ВСЁ содержимое папки football_predictor_v4.
-6. Нажми Commit changes.
-7. Подожди пересборку Streamlit.
-8. Открой сайт и нажми «Обновить рейтинг FIFA».
-9. На GitHub открой Actions -> Update data and retrain model -> Run workflow.
+1. Upload all files from this folder to the root of your GitHub repository.
+2. Wait for Streamlit to redeploy app.py.
+3. Create a free football-data.org token.
+4. In Streamlit Cloud -> Manage app -> Settings -> Secrets add:
 
-Главный файл Streamlit: app.py
-Полная инструкция: README.md
+[data_sources]
+football_data_api_key = "YOUR_TOKEN"
+
+5. In GitHub repository -> Settings -> Secrets and variables -> Actions add:
+FOOTBALL_DATA_API_KEY = your token
+
+HOW TO USE
+- Select a real World Cup 2026 fixture.
+- Click "Сделать прогноз".
+- Do not enter date, round, points, goal difference or lineups manually.
+- If lineups are not published yet, the prediction is calculated without them.
+- Reopen the same match after lineups are published to get the lineup-adjusted prediction.

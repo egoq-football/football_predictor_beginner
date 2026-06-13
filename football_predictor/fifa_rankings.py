@@ -169,6 +169,8 @@ class FifaRankingHistory:
         if group is None or group.empty:
             return None
         date = pd.Timestamp(on_date)
+        if date.tzinfo is not None:
+            date = date.tz_convert("UTC").tz_localize(None)
         eligible = group[group["date"] <= date]
         if eligible.empty:
             return None
@@ -198,3 +200,23 @@ class FifaRankingHistory:
     def rank(self, team: str, on_date: str | pd.Timestamp) -> int | None:
         info = self.lookup(team, on_date)
         return info.rank if info else None
+
+
+def refresh_current_ranking_if_stale(
+    path: str | Path = FIFA_CURRENT_PATH,
+    max_age_hours: int = 12,
+) -> pd.DataFrame:
+    """Refresh the public FIFA snapshot automatically, keeping the last good file on failure."""
+    path = Path(path)
+    stale = True
+    if path.exists() and path.stat().st_size > 0:
+        age_seconds = pd.Timestamp.now(tz="UTC").timestamp() - path.stat().st_mtime
+        stale = age_seconds > max_age_hours * 3600
+        if not stale:
+            try:
+                return pd.read_csv(path)
+            except Exception:
+                stale = True
+    if stale:
+        return download_current_ranking(path)
+    return pd.DataFrame()

@@ -1,0 +1,73 @@
+fixture_id,group_name,kickoff_utc,home_team,away_team,status,home_score,away_score,stage,source,source_match_id,venue,updated_at
+66456904,A,2026-06-11T19:00:00Z,Mexico,South Africa,FINISHED,2.0,0.0,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456906,A,2026-06-12T02:00:00Z,South Korea,Czech Republic,FINISHED,2.0,1.0,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456910,A,2026-06-18T16:00:00Z,Czech Republic,South Africa,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456908,A,2026-06-19T01:00:00Z,Mexico,South Korea,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456912,A,2026-06-25T01:00:00Z,Czech Republic,Mexico,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456914,A,2026-06-25T01:00:00Z,South Africa,South Korea,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456916,B,2026-06-12T19:00:00Z,Canada,Bosnia and Herzegovina,FINISHED,1.0,1.0,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456918,B,2026-06-13T19:00:00Z,Qatar,Switzerland,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456922,B,2026-06-18T19:00:00Z,Switzerland,Bosnia and Herzegovina,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456920,B,2026-06-18T22:00:00Z,Canada,Qatar,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456924,B,2026-06-24T19:00:00Z,Switzerland,Canada,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456926,B,2026-06-24T19:00:00Z,Bosnia and Herzegovina,Qatar,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456928,C,2026-06-13T22:00:00Z,Brazil,Morocco,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456930,C,2026-06-14T01:00:00Z,Haiti,Scotland,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456934,C,2026-06-19T22:00:00Z,Scotland,Morocco,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456932,C,2026-06-20T00:30:00Z,Brazil,Haiti,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456936,C,2026-06-24T22:00:00Z,Scotland,Brazil,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456938,C,2026-06-24T22:00:00Z,Morocco,Haiti,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456940,D,2026-06-13T01:00:00Z,United States,Paraguay,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456942,D,2026-06-14T04:00:00Z,Australia,Turkey,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456944,D,2026-06-19T19:00:00Z,United States,Australia,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456946,D,2026-06-20T03:00:00Z,Turkey,Paraguay,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456948,D,2026-06-26T02:00:00Z,Turkey,United States,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456950,D,2026-06-26T02:00:00Z,Paraguay,Australia,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457070,E,2026-06-14T17:00:00Z,Germany,Curaçao,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457072,E,2026-06-14T23:00:00Z,Ivory Coast,Ecuador,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457074,E,2026-06-20T20:00:00Z,Germany,Ivory Coast,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457076,E,2026-06-21T00:00:00Z,Ecuador,Curaçao,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457078,E,2026-06-25T20:00:00Z,Ecuador,Germany,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457080,E,2026-06-25T20:00:00Z,Curaçao,Ivory Coast,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456968,F,2026-06-14T20:00:00Z,Netherlands,Japan,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456970,F,2026-06-15T02:00:00Z,Sweden,Tunisia,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456972,F,2026-06-20T17:00:00Z,Netherlands,Sweden,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456974,F,2026-06-21T04:00:00Z,Tunisia,Japan,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456976,F,2026-06-25T23:00:00Z,Tunisia,Netherlands,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456978,F,2026-06-25T23:00:00Z,Japan,Sweden,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456982,G,2026-06-15T19:00:00Z,Belgium,Egypt,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456984,G,2026-06-16T01:00:00Z,Iran,New Zealand,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456986,G,2026-06-21T19:00:00Z,Belgium,Iran,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456988,G,2026-06-22T01:00:00Z,New Zealand,Egypt,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456990,G,2026-06-27T03:00:00Z,New Zealand,Belgium,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456992,G,2026-06-27T03:00:00Z,Egypt,Iran,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456994,H,2026-06-15T16:00:00Z,Spain,Cape Verde,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456996,H,2026-06-15T22:00:00Z,Saudi Arabia,Uruguay,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66456998,H,2026-06-21T16:00:00Z,Spain,Saudi Arabia,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457000,H,2026-06-21T22:00:00Z,Uruguay,Cape Verde,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457002,H,2026-06-27T00:00:00Z,Uruguay,Spain,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457004,H,2026-06-27T00:00:00Z,Cape Verde,Saudi Arabia,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457006,I,2026-06-16T19:00:00Z,France,Senegal,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457008,I,2026-06-16T22:00:00Z,Iraq,Norway,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457010,I,2026-06-22T21:00:00Z,France,Iraq,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457012,I,2026-06-23T00:00:00Z,Norway,Senegal,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457014,I,2026-06-26T19:00:00Z,Norway,France,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457016,I,2026-06-26T19:00:00Z,Senegal,Iraq,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457018,J,2026-06-17T01:00:00Z,Argentina,Algeria,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457020,J,2026-06-17T04:00:00Z,Austria,Jordan,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457022,J,2026-06-22T17:00:00Z,Argentina,Austria,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457024,J,2026-06-23T03:00:00Z,Jordan,Algeria,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457026,J,2026-06-28T02:00:00Z,Jordan,Argentina,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457028,J,2026-06-28T02:00:00Z,Algeria,Austria,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457030,K,2026-06-17T17:00:00Z,Portugal,DR Congo,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457032,K,2026-06-18T02:00:00Z,Uzbekistan,Colombia,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457034,K,2026-06-23T17:00:00Z,Portugal,Uzbekistan,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457036,K,2026-06-24T02:00:00Z,Colombia,DR Congo,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457038,K,2026-06-27T23:30:00Z,Colombia,Portugal,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457040,K,2026-06-27T23:30:00Z,DR Congo,Uzbekistan,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457042,L,2026-06-17T20:00:00Z,England,Croatia,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457044,L,2026-06-17T23:00:00Z,Ghana,Panama,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457046,L,2026-06-23T20:00:00Z,England,Ghana,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457048,L,2026-06-23T23:00:00Z,Panama,Croatia,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457050,L,2026-06-27T21:00:00Z,Panama,England,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z
+66457052,L,2026-06-27T21:00:00Z,Croatia,Ghana,SCHEDULED,,,group,FIFA published schedule snapshot,,,2026-06-13T00:20:00Z

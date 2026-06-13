@@ -107,21 +107,20 @@ def predict_world_cup_match(
     selected_home_players: list[str] | None = None,
     selected_away_players: list[str] | None = None,
     player_pool: pd.DataFrame | None = None,
-    manual_home_strength: float | None = None,
-    manual_away_strength: float | None = None,
+    lineup_history: pd.DataFrame | None = None,
+    data_source_notes: list[str] | None = None,
 ) -> dict:
     context = infer_group_motivation(context)
     player_pool = player_pool if player_pool is not None else load_player_pool()
-    home_squad = assess_squad(player_pool, home, selected_home_players)
-    away_squad = assess_squad(player_pool, away, selected_away_players)
-    lineup_home = home_squad.relative_strength if home_squad.available else manual_home_strength
-    lineup_away = away_squad.relative_strength if away_squad.available else manual_away_strength
-    if not home_squad.available and manual_home_strength is not None:
-        home_squad.relative_strength = float(manual_home_strength)
-        home_squad.explanation = f"Ручная оценка силы состава: {manual_home_strength * 100:.1f}% от оптимального."
-    if not away_squad.available and manual_away_strength is not None:
-        away_squad.relative_strength = float(manual_away_strength)
-        away_squad.explanation = f"Ручная оценка силы состава: {manual_away_strength * 100:.1f}% от оптимального."
+    lineup_history = lineup_history if lineup_history is not None else load_match_lineups()
+    home_squad = assess_squad(
+        player_pool, home, selected_home_players, lineup_history=lineup_history, match_date=match_date
+    )
+    away_squad = assess_squad(
+        player_pool, away, selected_away_players, lineup_history=lineup_history, match_date=match_date
+    )
+    lineup_home = home_squad.relative_strength if home_squad.available else None
+    lineup_away = away_squad.relative_strength if away_squad.available else None
 
     features = current_feature_frame(
         builder, home, away, neutral, match_date, context,
@@ -171,35 +170,111 @@ def predict_world_cup_match(
 
     current_home_fifa = fifa.current_lookup(home)
     current_away_fifa = fifa.current_lookup(away)
-    explanations = []
+    explanation_rows: list[dict[str, str]] = []
+    headline_parts: list[str] = []
+
     if current_home_fifa and current_away_fifa:
         gap = current_home_fifa.points - current_away_fifa.points
+        gap_abs = abs(gap)
         leader = home if gap > 0 else away
-        explanations.append(
-            f"FIFA: {home} — {current_home_fifa.rank or '—'} место ({current_home_fifa.points:.2f}), "
-            f"{away} — {current_away_fifa.rank or '—'} место ({current_away_fifa.points:.2f}); "
-            f"разница {abs(gap):.2f} очка в пользу {leader}."
-        )
+        if gap_abs < 25:
+            scale = "почти равные позиции"
+        elif gap_abs < 75:
+            scale = "небольшое преимущество"
+        elif gap_abs < 150:
+            scale = "заметное преимущество"
+        else:
+            scale = "очень большое преимущество"
+        explanation_rows.append({
+            "Фактор": "Рейтинг FIFA",
+            "Преимущество": leader if gap_abs >= 10 else "Практически равны",
+            "Оценка": f"{scale}: {gap_abs:.1f} очка",
+            "Детали": (
+                f"{home}: {current_home_fifa.rank or '—'} место, {current_home_fifa.points:.2f}; "
+                f"{away}: {current_away_fifa.rank or '—'} место, {current_away_fifa.points:.2f}."
+            ),
+        })
+        if gap_abs >= 75:
+            headline_parts.append(f"рейтинг FIFA заметно в пользу {leader}")
+
     row = features.iloc[0]
-    opp_leader = home if row["opponent_elo_diff_5"] > 0 else away
-    explanations.append(
-        f"Сила соперников в последних пяти матчах: преимущество у {opp_leader}; "
-        f"разница среднего Elo соперников {abs(row['opponent_elo_diff_5']):.1f}."
-    )
-    form_leader = home if row["adjusted_form_diff_5"] > 0 else away
-    explanations.append(
-        f"Форма с поправкой на силу соперников лучше у {form_leader} "
-        f"({abs(row['adjusted_form_diff_5']):.2f} условного очка за матч разницы)."
-    )
-    if context.home_must_win or context.away_must_win:
-        must = home if context.home_must_win else away
-        explanations.append(f"Турнирная ситуация: для {must} победа отмечена как необходимая.")
-    if context.home_draw_enough or context.away_draw_enough:
-        enough = home if context.home_draw_enough else away
-        explanations.append(f"Турнирная ситуация: {enough} может устраивать ничья.")
-    if home_squad.available or away_squad.available:
-        explanations.append(f"Состав {home}: {home_squad.explanation}")
-        explanations.append(f"Состав {away}: {away_squad.explanation}")
+    opp_gap = float(row.get("opponent_elo_diff_5", 0.0))
+    opp_leader = home if opp_gap > 0 else away
+    explanation_rows.append({
+        "Фактор": "Сила последних соперников",
+        "Преимущество": opp_leader if abs(opp_gap) >= 15 else "Сопоставимый уровень",
+        "Оценка": f"Разница среднего Elo соперников: {abs(opp_gap):.1f}",
+        "Детали": "Последние пять матчей оцениваются с поправкой на силу каждого соперника, место проведения и результат выше или ниже ожидания.",
+    })
+
+    form_gap = float(row.get("adjusted_form_diff_5", 0.0))
+    form_leader = home if form_gap > 0 else away
+    explanation_rows.append({
+        "Фактор": "Скорректированная форма",
+        "Преимущество": form_leader if abs(form_gap) >= 0.08 else "Форма близкая",
+        "Оценка": f"Разница: {abs(form_gap):.2f} условного очка за матч",
+        "Детали": "Учитываются пять последних игр, но победа над сильным соперником ценится выше победы над слабым.",
+    })
+    if abs(form_gap) >= 0.18:
+        headline_parts.append(f"текущая форма лучше у {form_leader}")
+
+    dc_edge = dc_prediction.home_lambda - dc_prediction.away_lambda
+    goal_leader = home if dc_edge > 0 else away
+    explanation_rows.append({
+        "Фактор": "Модель голов Dixon–Coles",
+        "Преимущество": goal_leader if abs(dc_edge) >= 0.12 else "Ожидаемые голы близки",
+        "Оценка": f"{home} {dc_prediction.home_lambda:.2f} — {dc_prediction.away_lambda:.2f} {away}",
+        "Детали": "Ожидаемые голы построены по атаке и обороне обеих команд; отдельно скорректированы низкие счета 0:0, 1:0, 0:1 и 1:1.",
+    })
+
+    tournament_details = []
+    if context.stage == "group":
+        tournament_details.append(
+            f"Перед матчем: {home} — {context.home_points} очков и разница {context.home_goal_difference:+d}; "
+            f"{away} — {context.away_points} очков и разница {context.away_goal_difference:+d}."
+        )
+        if context.home_must_win:
+            tournament_details.append(f"Для {home} победа имеет повышенную турнирную ценность.")
+        if context.away_must_win:
+            tournament_details.append(f"Для {away} победа имеет повышенную турнирную ценность.")
+        if context.home_draw_enough:
+            tournament_details.append(f"{home} может устраивать ничья.")
+        if context.away_draw_enough:
+            tournament_details.append(f"{away} может устраивать ничья.")
+    else:
+        tournament_details.append("Это матч плей-офф: отдельно оцениваются ничья после 90 минут, дополнительное время и итоговый проход.")
+    explanation_rows.append({
+        "Фактор": "Турнирная ситуация",
+        "Преимущество": "Автоматически учтена",
+        "Оценка": "Контекст ЧМ-2026",
+        "Детали": " ".join(tournament_details),
+    })
+
+    lineup_detail = f"{home}: {home_squad.explanation} {away}: {away_squad.explanation}"
+    explanation_rows.append({
+        "Фактор": "Стартовые составы",
+        "Преимущество": "Учтены" if context.lineups_known else "Ещё не опубликованы",
+        "Оценка": "Автоматическая загрузка",
+        "Детали": lineup_detail,
+    })
+
+    notes = data_source_notes or []
+    explanation_rows.append({
+        "Фактор": "Актуальность данных",
+        "Преимущество": "Автоматическое обновление",
+        "Оценка": f"Источников/проверок: {max(len(notes), 1)}",
+        "Детали": " ".join(notes) if notes else "Использованы последние доступные матчи, рейтинг FIFA и локальный снимок календаря.",
+    })
+
+    leader_idx = int(np.argmax(final_probs))
+    leader_text = [away, "ничья", home][leader_idx]
+    if leader_text == "ничья":
+        summary = "Итоговый ансамбль считает ничью наиболее вероятным отдельным исходом."
+    else:
+        summary = f"Итоговый ансамбль отдаёт преимущество команде {leader_text}."
+    if headline_parts:
+        summary += " Основные причины: " + "; ".join(headline_parts) + "."
+    explanations = [summary] + [f"{item['Фактор']}: {item['Детали']}" for item in explanation_rows]
 
     progression = None
     if context.stage == "knockout":
@@ -236,6 +311,8 @@ def predict_world_cup_match(
         "outcomes": _outcomes_table(home, away, final_probs, markets, halftime, second_half, corners, cards),
         "features": row.to_dict(),
         "explanations": explanations,
+        "explanation_rows": explanation_rows,
+        "summary": summary,
         "home_squad": asdict(home_squad),
         "away_squad": asdict(away_squad),
         "model_version": bundle.version,
