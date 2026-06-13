@@ -111,8 +111,25 @@ def load_results(
     cutoff = pd.Timestamp(cutoff_date) if cutoff_date is not None else pd.Timestamp(date.today())
     start = pd.Timestamp(start_date)
     df = df[(df["date"] >= start) & (df["date"] <= cutoff)].copy()
-    df = df[~df["home_team"].isin(DEFUNCT_TEAMS) & ~df["away_team"].isin(DEFUNCT_TEAMS)]
-    df = df.sort_values(["date", "home_team", "away_team"]).reset_index(drop=True)
+
+    df = df[
+        ~df["home_team"].isin(DEFUNCT_TEAMS)
+        & ~df["away_team"].isin(DEFUNCT_TEAMS)
+    ].copy()
+
+    # Удаляем повторные записи одного и того же матча.
+    # Если дубликаты отличаются заполненностью, оставляем наиболее полную строку.
+    match_keys = ["date", "home_team", "away_team"]
+    df["_row_completeness"] = df.notna().sum(axis=1)
+
+    df = (
+        df.sort_values(match_keys + ["_row_completeness"])
+        .drop_duplicates(subset=match_keys, keep="last")
+        .drop(columns="_row_completeness")
+        .sort_values(match_keys)
+        .reset_index(drop=True)
+    )
+
     if df.empty:
         raise ValueError("После фильтрации не осталось завершённых матчей.")
     return df
@@ -158,11 +175,44 @@ def load_optional_stats(path: str | Path = ENRICHED_STATS_PATH) -> pd.DataFrame:
     return df.dropna(subset=["date", "home_team", "away_team"]).sort_values("date")
 
 
-def merge_optional_stats(results: pd.DataFrame, optional: pd.DataFrame) -> pd.DataFrame:
-    if optional.empty:
-        return results.copy()
+def merge_optional_stats(
+    results: pd.DataFrame,
+    optional: pd.DataFrame,
+) -> pd.DataFrame:
     keys = ["date", "home_team", "away_team"]
-    return results.merge(optional, on=keys, how="left", validate="one_to_one")
+
+    # Дополнительная защита от повторов в основном наборе.
+    results_clean = (
+        results.copy()
+        .drop_duplicates(subset=keys, keep="last")
+        .reset_index(drop=True)
+    )
+
+    if optional.empty:
+        return results_clean
+
+    optional_clean = optional.copy().replace("", np.nan)
+
+    # Если один матч пришёл несколькими строками из разных источников,
+    # собираем по каждому столбцу последнее непустое значение.
+    def last_valid(series: pd.Series):
+        valid = series.dropna()
+        if valid.empty:
+            return np.nan
+        return valid.iloc[-1]
+
+    optional_clean = (
+        optional_clean
+        .groupby(keys, as_index=False, sort=False)
+        .agg(last_valid)
+    )
+
+    return results_clean.merge(
+        optional_clean,
+        on=keys,
+        how="left",
+        validate="one_to_one",
+    )
 
 
 def load_player_pool(path: str | Path = PLAYER_POOL_PATH) -> pd.DataFrame:
@@ -234,4 +284,3 @@ def data_coverage(results: pd.DataFrame, optional: pd.DataFrame, player_pool: pd
         "sources": ", ".join(sorted({x for x in optional.get("source", pd.Series(dtype=str)).astype(str) if x and x != "nan"})),
     })
     return coverage
-
