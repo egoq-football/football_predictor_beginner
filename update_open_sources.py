@@ -45,7 +45,7 @@ def main() -> None:
             lambda: update_football_data_history(api_key, max_details=70),
         )
 
-    if api_key and isinstance(fixtures, pd.DataFrame) and not fixtures.empty:
+    if isinstance(fixtures, pd.DataFrame) and not fixtures.empty:
         now = pd.Timestamp.now(tz="UTC")
         window = fixtures[
             (fixtures["kickoff_utc"] >= now - timedelta(hours=6))
@@ -53,7 +53,7 @@ def main() -> None:
         ]
         for _, row in window.iterrows():
             fixture = row_to_fixture(row)
-            snapshot = fetch_match_lineups(fixture.source_match_id, api_key=api_key)
+            snapshot = fetch_match_lineups(fixture.source_match_id, api_key=api_key, fixture=fixture)
             append_lineup_snapshot(fixture, snapshot)
 
     _safe_step(

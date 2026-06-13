@@ -204,12 +204,12 @@ def build_candidates(
             rows.append(_candidate(
                 "Индивидуальный тотал", f"{team_name}: тотал больше {str(line).replace('.', ',')}", over,
                 "Dixon–Coles + форма атаки", f"{team_key}_over_{suffix}", _binary_agreement(over, alt_over), base_quality,
-                "Индивидуальная результативность сверена с атакой команды и защитой соперника.",
+                "Сопоставлены результативность команды и оборона соперника.",
             ))
             rows.append(_candidate(
                 "Индивидуальный тотал", f"{team_name}: тотал меньше {str(line).replace('.', ',')}", 1.0 - over,
                 "Dixon–Coles + форма атаки", f"{team_key}_under_{suffix}", _binary_agreement(1.0 - over, 1.0 - alt_over), base_quality,
-                "Индивидуальная результативность сверена с атакой команды и защитой соперника.",
+                "Сопоставлены результативность команды и оборона соперника.",
             ))
 
     if halftime.get("available"):
@@ -323,10 +323,8 @@ def select_non_obvious_outcomes(
                 continue
             candidate.reason += " Рыночный консенсус использован только как скрытая проверка преимущества модели."
         else:
-            candidate.reason += (
-                " Для этого рынка нет надёжной внешней линии; применён строгий математический фильтр "
-                "эквивалента коэффициента от 1,40. Коэффициенты на сайте не показываются."
-            )
+            # Внутренний фильтр сохраняется, но техническое пояснение не выводится пользователю.
+            pass
 
         eligible.append(candidate)
         feature_rows.append(_canonical_selector_features(candidate, features))
@@ -337,13 +335,11 @@ def select_non_obvious_outcomes(
             learned = selector_model.predict_success_probability(pd.DataFrame(feature_rows))
             for candidate, score in zip(eligible, learned):
                 candidate.score = float(score)
-                candidate.reason += " Итоговый ранг определён обученным историческим селектором, а не вручную заданными весами."
         else:
             # Compatibility fallback for an old bundle. New v4.3 bundles include
             # a trained selector; this branch avoids crashing during redeploy.
             for candidate in eligible:
                 candidate.score = float(candidate.probability)
-                candidate.reason += " Временно применён консервативный резервный ранг до переобучения селектора."
 
     eligible.sort(
         key=lambda row: (row.score, row.market_edge if row.market_edge is not None else -1.0, row.probability),

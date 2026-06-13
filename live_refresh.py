@@ -15,8 +15,7 @@ from football_predictor.world_cup_live import (
 def main() -> None:
     key = os.getenv("FOOTBALL_DATA_API_KEY", "").strip()
     if not key:
-        print("FOOTBALL_DATA_API_KEY is not configured; live refresh skipped.")
-        return
+        print("FOOTBALL_DATA_API_KEY is not configured; using local fixtures and ESPN lineup fallback.")
     fixtures = get_world_cup_fixtures(api_key=key, persist=True)
     if fixtures.empty:
         return
@@ -28,7 +27,7 @@ def main() -> None:
     ]
     for _, row in window.iterrows():
         fixture = row_to_fixture(row)
-        snapshot = fetch_match_lineups(fixture.source_match_id, api_key=key)
+        snapshot = fetch_match_lineups(fixture.source_match_id, api_key=key, fixture=fixture)
         append_lineup_snapshot(fixture, snapshot)
         print(fixture.label(), snapshot.message)
 

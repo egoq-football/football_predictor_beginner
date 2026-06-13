@@ -15,6 +15,8 @@ from .context import MatchContext, infer_group_motivation
 from .data_loader import load_match_lineups, normalize_team_name
 
 FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
+ESPN_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
+ESPN_SUMMARY_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary"
 WORLD_CUP_COMPETITION_CODES = ("WC", "2000")
 FINISHED_STATUSES = {"FINISHED", "AWARDED"}
 ACTIVE_STATUSES = {"SCHEDULED", "TIMED", "IN_PLAY", "PAUSED", "LIVE"}
@@ -375,26 +377,184 @@ def _lineup_names(team_obj: dict[str, Any]) -> list[str]:
     return names[:11]
 
 
-def fetch_match_lineups(source_match_id: str, api_key: str | None = None) -> LineupSnapshot:
-    key = _api_key(api_key)
-    if not key or not source_match_id:
-        return LineupSnapshot(False, [], [], "", "Составы ещё не получены: для автоматической загрузки нужен бесплатный ключ football-data.org.")
+def _espn_team_name(value: Any) -> str:
+    if isinstance(value, str):
+        return normalize_team_name(value)
+    if not isinstance(value, dict):
+        return ""
+    return normalize_team_name(str(
+        value.get("displayName")
+        or value.get("shortDisplayName")
+        or value.get("name")
+        or value.get("location")
+        or value.get("abbreviation")
+        or ""
+    ))
+
+
+def _espn_event_id(fixture: Fixture) -> str:
+    """Find the ESPN event id by date and exact team pair.
+
+    ESPN is used only as a no-key fallback when the primary provider does not
+    expose the official starters. A date/team match avoids hard-coding event ids.
+    """
     try:
         response = requests.get(
-            f"{FOOTBALL_DATA_BASE}/matches/{source_match_id}",
-            headers=_headers(key, unfold_lineups=True),
+            ESPN_SCOREBOARD_URL,
+            params={"dates": fixture.kickoff_utc.strftime("%Y%m%d"), "limit": 100},
+            headers={"User-Agent": "world-cup-2026-predictor/4.4"},
             timeout=20,
         )
         response.raise_for_status()
         payload = response.json()
-        home_players = _lineup_names(payload.get("homeTeam") or {})
-        away_players = _lineup_names(payload.get("awayTeam") or {})
-        if len(home_players) >= 7 and len(away_players) >= 7:
-            return LineupSnapshot(True, home_players, away_players, "football-data.org", "Официальные стартовые составы получены автоматически.")
-        return LineupSnapshot(False, [], [], "football-data.org", "Стартовые составы ещё не опубликованы источником; прогноз выполнится без поправки на состав.")
-    except Exception as exc:  # pragma: no cover - network dependent
-        return LineupSnapshot(False, [], [], "football-data.org", f"Составы не удалось загрузить ({exc}); прогноз выполнится без них.")
+    except Exception:
+        return ""
 
+    wanted = {normalize_team_name(fixture.home_team), normalize_team_name(fixture.away_team)}
+    for event in payload.get("events", []) or []:
+        competitions = event.get("competitions", []) or []
+        if not competitions:
+            continue
+        competitors = competitions[0].get("competitors", []) or []
+        names = {_espn_team_name(item.get("team") or {}) for item in competitors}
+        names.discard("")
+        if names == wanted:
+            return str(event.get("id") or competitions[0].get("id") or "")
+    return ""
+
+
+def _espn_starters_from_payload(payload: dict[str, Any], team_name: str) -> list[str]:
+    """Extract only explicitly marked starters from an ESPN summary payload."""
+    wanted = normalize_team_name(team_name)
+    blocks: list[dict[str, Any]] = []
+    blocks.extend(payload.get("rosters", []) or [])
+
+    boxscore = payload.get("boxscore") or {}
+    blocks.extend(boxscore.get("players", []) or [])
+
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        block_team = _espn_team_name(block.get("team") or block.get("teamInfo") or {})
+        if block_team != wanted:
+            continue
+        entries = (
+            block.get("roster")
+            or block.get("athletes")
+            or block.get("lineup")
+            or block.get("players")
+            or []
+        )
+        names: list[str] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            starter_flag = entry.get("starter")
+            if starter_flag is None:
+                starter_flag = entry.get("isStarter")
+            if starter_flag is None:
+                starter_flag = entry.get("starting")
+            # Do not treat a general squad list as an official starting XI.
+            if starter_flag is not True:
+                continue
+            athlete = entry.get("athlete") if isinstance(entry.get("athlete"), dict) else entry
+            name = athlete.get("displayName") or athlete.get("fullName") or athlete.get("name") or athlete.get("shortName")
+            if name:
+                names.append(str(name).strip())
+        # Preserve order and avoid duplicated player records.
+        names = list(dict.fromkeys(name for name in names if name))
+        if len(names) >= 7:
+            return names[:11]
+    return []
+
+
+def _fetch_espn_lineups(fixture: Fixture) -> LineupSnapshot:
+    event_id = _espn_event_id(fixture)
+    if not event_id:
+        return LineupSnapshot(False, [], [], "ESPN", "ESPN не нашёл выбранный матч по дате и командам.")
+    try:
+        response = requests.get(
+            ESPN_SUMMARY_URL,
+            params={"event": event_id},
+            headers={"User-Agent": "world-cup-2026-predictor/4.4"},
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        home_players = _espn_starters_from_payload(payload, fixture.home_team)
+        away_players = _espn_starters_from_payload(payload, fixture.away_team)
+        if len(home_players) >= 7 and len(away_players) >= 7:
+            return LineupSnapshot(
+                True,
+                home_players,
+                away_players,
+                "ESPN",
+                "Официальные стартовые составы получены автоматически из резервного открытого источника ESPN.",
+            )
+        return LineupSnapshot(False, [], [], "ESPN", "ESPN пока не пометил стартовые составы как официальные.")
+    except Exception as exc:  # pragma: no cover - network dependent
+        return LineupSnapshot(False, [], [], "ESPN", f"Резервный источник составов недоступен ({exc}).")
+
+
+def fetch_match_lineups(
+    source_match_id: str,
+    api_key: str | None = None,
+    fixture: Fixture | None = None,
+) -> LineupSnapshot:
+    """Load official starters, first from football-data.org, then from ESPN.
+
+    The fallback is intentionally no-key and only accepts players explicitly
+    marked as starters. Predicted or probable lineups are never used.
+    """
+    key = _api_key(api_key)
+    primary_message = ""
+
+    if key and source_match_id:
+        try:
+            response = requests.get(
+                f"{FOOTBALL_DATA_BASE}/matches/{source_match_id}",
+                headers=_headers(key, unfold_lineups=True),
+                timeout=20,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            home_players = _lineup_names(payload.get("homeTeam") or {})
+            away_players = _lineup_names(payload.get("awayTeam") or {})
+            if len(home_players) >= 7 and len(away_players) >= 7:
+                return LineupSnapshot(
+                    True,
+                    home_players,
+                    away_players,
+                    "football-data.org",
+                    "Официальные стартовые составы получены автоматически через football-data.org.",
+                )
+            primary_message = "football-data.org пока не вернул полный стартовый состав."
+        except Exception as exc:  # pragma: no cover - network dependent
+            primary_message = f"football-data.org не вернул составы ({exc})."
+    elif not key:
+        primary_message = "Ключ football-data.org не настроен."
+    else:
+        primary_message = "У матча отсутствует идентификатор football-data.org."
+
+    if fixture is not None:
+        fallback = _fetch_espn_lineups(fixture)
+        if fallback.available:
+            return fallback
+        return LineupSnapshot(
+            False,
+            [],
+            [],
+            fallback.source,
+            f"{primary_message} {fallback.message} Прогноз выполнен без поправки на состав.",
+        )
+
+    return LineupSnapshot(
+        False,
+        [],
+        [],
+        "football-data.org",
+        f"{primary_message} Прогноз выполнен без поправки на состав.",
+    )
 
 def append_lineup_snapshot(fixture: Fixture, snapshot: LineupSnapshot, path: str | Path = MATCH_LINEUPS_PATH) -> None:
     if not snapshot.available:

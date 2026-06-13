@@ -39,7 +39,7 @@ from football_predictor.world_cup_live import (
 )
 
 
-st.set_page_config(page_title="World Cup 2026 Predictor v4.3", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="World Cup 2026 Predictor v4.4", page_icon="⚽", layout="wide")
 st.markdown(
     """
     <style>
@@ -53,7 +53,7 @@ st.markdown(
 )
 
 st.title("⚽ Прогноз матчей чемпионата мира 2026")
-st.caption("Версия сайта 4.3: проверка качества данных, корректные составы и усиленный выбор неочевидного исхода.")
+st.caption("Версия сайта 4.4: резервный источник официальных составов и более компактная выдача исходов.")
 
 
 def _secret(section: str, name: str) -> str:
@@ -238,7 +238,7 @@ run = st.button("Сделать прогноз", type="primary")
 if run:
     with st.spinner("Проверяю составы, турнирный контекст, открытые данные и модели…"):
         try:
-            lineup_snapshot = fetch_match_lineups(fixture.source_match_id, api_key=football_data_key)
+            lineup_snapshot = fetch_match_lineups(fixture.source_match_id, api_key=football_data_key, fixture=fixture)
             if lineup_snapshot.available:
                 append_lineup_snapshot(fixture, lineup_snapshot)
                 lineup_history = load_match_lineups()
@@ -262,6 +262,12 @@ if run:
             )
             prediction["fixture"] = fixture.as_dict()
             prediction["lineup_source_message"] = lineup_snapshot.message
+            prediction["lineup_available"] = lineup_snapshot.available
+            prediction["lineup_players"] = {
+                "home": list(lineup_snapshot.home_players),
+                "away": list(lineup_snapshot.away_players),
+                "source": lineup_snapshot.source,
+            }
             st.session_state["prediction"] = prediction
         except Exception as exc:
             st.error(f"Ошибка прогноза: {exc}")
@@ -273,7 +279,7 @@ if not result:
 
 st.divider()
 st.subheader(f"2. Прогноз: {result['home']} — {result['away']}")
-lineups_used = bool(result.get("home_squad", {}).get("available") and result.get("away_squad", {}).get("available"))
+lineups_used = bool(result.get("lineup_available", False))
 if lineups_used:
     st.success("Обновлённый прогноз: официальные стартовые составы учтены.")
 else:
@@ -314,16 +320,17 @@ with tabs[1]:
         st.markdown(
             f"""<div class="best-card"><h3>{best['Исход']}</h3>
             <b>Вероятность модели: {best['Вероятность'] * 100:.1f}%</b><br>
-            Уверенность: {best['Уверенность']}<br><span class="muted">{best['Основание']}</span></div>""",
+            Уверенность: {best['Уверенность']}</div>""",
             unsafe_allow_html=True,
         )
         alternatives = pd.DataFrame(selection.get("alternatives", []))
         if not alternatives.empty:
             st.write("### Альтернативы")
+            visible = [column for column in ["Категория", "Исход", "Вероятность", "Уверенность"] if column in alternatives.columns]
+            alternatives = alternatives[visible]
             st.dataframe(alternatives.style.format({"Вероятность": "{:.1%}"}), use_container_width=True, hide_index=True)
     else:
         st.info(selection.get("message", "Подходящий неочевидный исход не найден."))
-    st.caption(selection.get("market_message", ""))
     st.write("### Лучший исход в каждой категории")
     outcomes = pd.DataFrame(result["outcomes"])
     st.dataframe(outcomes.style.format({"Вероятность": "{:.1%}"}), use_container_width=True, hide_index=True)
@@ -356,6 +363,23 @@ with tabs[3]:
 
 with tabs[4]:
     st.write("### Стартовые составы")
+    lineup_players = result.get("lineup_players", {})
+    home_players = lineup_players.get("home", []) or []
+    away_players = lineup_players.get("away", []) or []
+    if home_players and away_players:
+        left, right = st.columns(2)
+        with left:
+            st.write(f"#### {result['home']}")
+            for number, player in enumerate(home_players, start=1):
+                st.write(f"{number}. {player}")
+        with right:
+            st.write(f"#### {result['away']}")
+            for number, player in enumerate(away_players, start=1):
+                st.write(f"{number}. {player}")
+    else:
+        st.info("Официальные стартовые составы пока не получены ни из одного подключённого источника.")
+
+    st.write("### Оценка влияния составов")
     squad_df = pd.DataFrame([
         {"Команда": result["home"], "Индекс состава к привычной основе": result["home_squad"]["relative_strength"], "Ключевых отсутствий": result["home_squad"]["missing_key_players"], "Пояснение": result["home_squad"]["explanation"]},
         {"Команда": result["away"], "Индекс состава к привычной основе": result["away_squad"]["relative_strength"], "Ключевых отсутствий": result["away_squad"]["missing_key_players"], "Пояснение": result["away_squad"]["explanation"]},
