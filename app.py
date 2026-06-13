@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import numpy as np
 import pandas as pd
@@ -8,6 +9,7 @@ import streamlit as st
 
 from football_predictor.config import (
     BACKTEST_PATH,
+    DATA_AUDIT_PATH,
     ENRICHED_STATS_PATH,
     FIFA_CURRENT_PATH,
     MATCH_LINEUPS_PATH,
@@ -37,7 +39,7 @@ from football_predictor.world_cup_live import (
 )
 
 
-st.set_page_config(page_title="World Cup 2026 Predictor", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="World Cup 2026 Predictor v4.3", page_icon="⚽", layout="wide")
 st.markdown(
     """
     <style>
@@ -51,6 +53,7 @@ st.markdown(
 )
 
 st.title("⚽ Прогноз матчей чемпионата мира 2026")
+st.caption("Версия сайта 4.3: проверка качества данных, корректные составы и усиленный выбор неочевидного исхода.")
 
 
 def _secret(section: str, name: str) -> str:
@@ -190,6 +193,13 @@ optional_stats = cached_optional_stats()
 player_pool = cached_player_pool()
 lineup_history = load_match_lineups()
 coverage = data_coverage(matches, optional_stats, player_pool)
+if Path(DATA_AUDIT_PATH).exists():
+    try:
+        audit_snapshot = json.loads(Path(DATA_AUDIT_PATH).read_text(encoding="utf-8"))
+        coverage["optional_invalid_rows"] = int(audit_snapshot.get("optional_invalid_rows_removed", coverage.get("optional_invalid_rows", 0)))
+        coverage["optional_unmatched_rows"] = int(audit_snapshot.get("optional_unmatched_rows", coverage.get("optional_unmatched_rows", 0)))
+    except Exception:
+        pass
 
 with st.sidebar:
     st.header("Состояние системы")
@@ -204,7 +214,7 @@ with st.sidebar:
         st.success("Календарь, результаты и составы подключены.")
     else:
         st.warning("Без ключа football-data.org составы и текущие результаты могут поступать с задержкой.")
-    st.caption("FIFA и открытая статистика обновляются автоматически. Коэффициенты нигде не показываются.")
+    st.caption("FIFA и открытая статистика обновляются автоматически. Рыночная линия используется только как скрытая проверка; коэффициенты нигде не показываются.")
 
 st.subheader("1. Выбери матч")
 selectable = selectable_fixtures(fixtures)
@@ -263,6 +273,11 @@ if not result:
 
 st.divider()
 st.subheader(f"2. Прогноз: {result['home']} — {result['away']}")
+lineups_used = bool(result.get("home_squad", {}).get("available") and result.get("away_squad", {}).get("available"))
+if lineups_used:
+    st.success("Обновлённый прогноз: официальные стартовые составы учтены.")
+else:
+    st.info("Предварительный прогноз: стартовые составы ещё не опубликованы или доступны не полностью.")
 p1, px, p2 = st.columns(3)
 p1.metric(f"Победа {result['home']}", f"{result['prob_home_win'] * 100:.1f}%")
 px.metric("Ничья", f"{result['prob_draw'] * 100:.1f}%")
@@ -342,24 +357,29 @@ with tabs[3]:
 with tabs[4]:
     st.write("### Стартовые составы")
     squad_df = pd.DataFrame([
-        {"Команда": result["home"], "Относительная сила": result["home_squad"]["relative_strength"], "Ключевых потерь": result["home_squad"]["missing_key_players"], "Пояснение": result["home_squad"]["explanation"]},
-        {"Команда": result["away"], "Относительная сила": result["away_squad"]["relative_strength"], "Ключевых потерь": result["away_squad"]["missing_key_players"], "Пояснение": result["away_squad"]["explanation"]},
+        {"Команда": result["home"], "Индекс состава к привычной основе": result["home_squad"]["relative_strength"], "Ключевых отсутствий": result["home_squad"]["missing_key_players"], "Пояснение": result["home_squad"]["explanation"]},
+        {"Команда": result["away"], "Индекс состава к привычной основе": result["away_squad"]["relative_strength"], "Ключевых отсутствий": result["away_squad"]["missing_key_players"], "Пояснение": result["away_squad"]["explanation"]},
     ])
-    st.dataframe(squad_df.style.format({"Относительная сила": "{:.1%}"}), use_container_width=True, hide_index=True)
+    st.dataframe(squad_df.style.format({"Индекс состава к привычной основе": "{:.1%}"}), use_container_width=True, hide_index=True)
     st.caption(result.get("lineup_source_message", ""))
     st.write("### Автоматически собранные данные")
     coverage_df = pd.DataFrame([
         ("Матчи с результатами", f"{coverage['results_matches']:,}"),
-        ("Матчи с расширенной статистикой", f"{coverage['optional_matches']:,}"),
+        ("Валидные матчи с расширенной статистикой", f"{coverage['optional_matches']:,}"),
+        ("Отброшено повреждённых строк", f"{coverage.get('optional_invalid_rows', 0):,}"),
+        ("Не сопоставлено с основной базой", f"{coverage.get('optional_unmatched_rows', 0):,}"),
         ("Матчи со счётом тайма", f"{coverage['halftime_rows']:,}"),
         ("Матчи с xG", f"{coverage['xg_rows']:,}"),
         ("Матчи с угловыми", f"{coverage['corners_rows']:,}"),
         ("Матчи с карточками", f"{coverage['cards_rows']:,}"),
-        ("Игроков в базе", f"{coverage['players']:,}"),
+        ("Игроков в индексе использования сборной", f"{coverage['players']:,}"),
         ("Последняя дата расширенных данных", coverage.get("optional_last_date") or "—"),
         ("Источники", coverage.get("sources") or "Автоматический сбор ещё не дал данных"),
     ], columns=["Показатель", "Значение"])
     st.dataframe(coverage_df, use_container_width=True, hide_index=True)
+    if coverage.get("optional_invalid_rows", 0) or coverage.get("optional_unmatched_rows", 0):
+        st.warning("Повреждённые и несопоставленные строки не участвуют в обучении и расчёте покрытия.")
+    st.caption("Показатель игроков — это индекс использования в сборной по открытой истории составов, а не коммерческий рейтинг и не оценка трансферной стоимости.")
 
 with tabs[5]:
     st.write("### Вероятности отдельных моделей")

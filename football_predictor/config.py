@@ -19,9 +19,10 @@ MODEL_BUNDLE_PATH = MODELS_DIR / "world_cup_2026_bundle.joblib"
 MODEL_META_PATH = MODELS_DIR / "model_metadata.json"
 BACKTEST_PATH = MODELS_DIR / "backtest_metrics.csv"
 WORLD_CUP_BACKTEST_PATH = MODELS_DIR / "world_cup_backtest.csv"
+DATA_AUDIT_PATH = MODELS_DIR / "data_audit.json"
 
 DATA_START_DATE = "2010-01-01"
-MODEL_VERSION = "4.2.1-world-cup-2026"
+MODEL_VERSION = "4.3.0-world-cup-2026"
 
 WORLD_CUP_TEAMS = {
     "A": ["Mexico", "South Africa", "South Korea", "Czech Republic"],

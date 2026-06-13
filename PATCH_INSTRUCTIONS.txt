@@ -1,0 +1,8 @@
+ОБНОВЛЕНИЕ v4.3 БЕЗ УДАЛЕНИЯ ТЕКУЩИХ ДАННЫХ
+
+1. Откройте папку football_predictor_v4_3_patch.
+2. Загрузите ВСЁ её содержимое в корень GitHub-репозитория с заменой файлов.
+3. Не удаляйте папки data и models в репозитории: патч их не содержит и сохраняет ваши текущие данные.
+4. Убедитесь, что загрузилась скрытая папка .github.
+5. GitHub → Actions → Update data and retrain model → Run workflow.
+6. После зелёной галочки: Streamlit Cloud → Manage app → Reboot app.

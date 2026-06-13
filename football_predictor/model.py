@@ -271,6 +271,9 @@ def save_bundle(bundle: WorldCupModelBundle, path: str | Path = MODEL_BUNDLE_PAT
 
 def load_bundle(path: str | Path = MODEL_BUNDLE_PATH) -> WorldCupModelBundle:
     bundle = joblib.load(path)
-    if getattr(bundle, "version", None) != MODEL_VERSION:
+    version = str(getattr(bundle, "version", ""))
+    compatible_versions = {MODEL_VERSION, "4.2.1-world-cup-2026"}
+    required = ("ml_model", "meta_model", "calibrator", "dixon_coles", "optional_models", "outcome_selector")
+    if version not in compatible_versions or any(not hasattr(bundle, name) for name in required):
         raise ValueError("Сохранённая модель несовместима с текущей версией.")
     return bundle

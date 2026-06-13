@@ -1,30 +1,11 @@
-WORLD CUP 2026 PREDICTOR v4.2.1
+WORLD CUP 2026 PREDICTOR v4.3
 
-1. Upload ALL files to the root of your GitHub repository.
-   Include hidden folders: .github and .streamlit
-2. Commit changes.
-3. Streamlit Cloud -> Manage app -> Reboot app.
-4. Streamlit Secrets:
+1. Загрузите все файлы в корень GitHub-репозитория.
+2. Убедитесь, что загрузились .github/workflows/retrain.yml и live_refresh.yml.
+3. GitHub: Settings → Actions → General → Read and write permissions.
+4. GitHub: Settings → Secrets and variables → Actions → FOOTBALL_DATA_API_KEY.
+5. Actions → Update data and retrain model → Run workflow.
+6. Дождитесь зелёной галочки.
+7. Streamlit Cloud → Manage app → Reboot app.
 
-[data_sources]
-football_data_api_key = "YOUR_FOOTBALL_DATA_TOKEN"
-odds_api_key = "OPTIONAL_THE_ODDS_API_KEY"
-
-5. GitHub -> Settings -> Secrets and variables -> Actions:
-FOOTBALL_DATA_API_KEY = your football-data.org token
-
-6. GitHub -> Settings -> Actions -> General:
-Enable Read and write permissions.
-
-7. GitHub -> Actions -> run manually:
-- Update data and retrain model
-- Refresh World Cup lineups and live context
-
-HOW TO USE
-- Select a World Cup 2026 fixture.
-- Click "Сделать прогноз".
-- No manual date, group round, points, goal difference or lineup input is needed.
-- Recalculate after official lineups are published.
-- Optional models activate automatically only after data and chronological validation are sufficient.
-- The best non-obvious outcome is ranked by a trained historical selector.
-- Odds are never displayed.
+Workflow сам удалит повреждённые строки расширенной статистики и заново рассчитает покрытие.

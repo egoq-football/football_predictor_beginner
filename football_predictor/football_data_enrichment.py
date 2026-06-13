@@ -9,7 +9,8 @@ import pandas as pd
 import requests
 
 from .config import ENRICHED_STATS_PATH, MATCH_LINEUPS_PATH, PLAYER_POOL_PATH
-from .data_loader import normalize_team_name
+from .data_loader import clean_optional_stats_frame, normalize_team_name
+from .player_usage import rebuild_player_pool_from_lineups
 from .world_cup_live import FOOTBALL_DATA_BASE, _headers
 
 
@@ -153,24 +154,7 @@ def _merge_non_null(existing: pd.DataFrame, addition: pd.DataFrame, keys: list[s
 
 
 def _update_player_pool(lineups: pd.DataFrame, path: str | Path = PLAYER_POOL_PATH) -> None:
-    if lineups.empty:
-        return
-    history = lineups.copy()
-    history["starter"] = history["starter"].fillna(False).astype(bool)
-    usage = history.groupby(["team", "player"], as_index=False).agg(
-        appearances=("date", "count"), starts=("starter", "sum"), minutes=("minutes", "sum")
-    )
-    usage["position"] = ""
-    usage["rating"] = 65.0 + np.clip(usage["starts"] * 1.1 + usage["appearances"] * 0.45, 0, 18)
-    usage["club_minutes_90d"] = 900.0
-    usage["national_caps"] = usage["appearances"]
-    usage["available"] = True
-    pool = usage[["team", "player", "position", "rating", "club_minutes_90d", "national_caps", "available"]]
-    old = pd.read_csv(path) if Path(path).exists() and Path(path).stat().st_size else pd.DataFrame()
-    merged = pd.concat([old, pool], ignore_index=True)
-    merged = merged.drop_duplicates(["team", "player"], keep="last")
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    merged.to_csv(path, index=False)
+    rebuild_player_pool_from_lineups(lineups, path)
 
 
 def update_football_data_history(
@@ -188,8 +172,13 @@ def update_football_data_history(
     if not key:
         return {"matches": 0, "lineups": 0, "restricted_seasons": 0}
 
-    existing = pd.read_csv(ENRICHED_STATS_PATH) if Path(ENRICHED_STATS_PATH).exists() else pd.DataFrame()
-    known_ids = set(existing.get("source_match_id", pd.Series(dtype=str)).dropna().astype(str))
+    existing_raw = pd.read_csv(ENRICHED_STATS_PATH) if Path(ENRICHED_STATS_PATH).exists() and Path(ENRICHED_STATS_PATH).stat().st_size else pd.DataFrame()
+    existing, _ = clean_optional_stats_frame(existing_raw)
+    known_ids = {
+        str(row.source_match_id)
+        for row in existing[["source", "source_match_id"]].itertuples(index=False)
+        if str(row.source).lower() == "football-data.org" and str(row.source_match_id).strip()
+    }
     stat_rows: list[dict[str, Any]] = []
     lineup_rows: list[dict[str, Any]] = []
     restricted = 0
@@ -238,8 +227,12 @@ def update_football_data_history(
 
     if stat_rows:
         merged_stats = _merge_non_null(existing, pd.DataFrame(stat_rows), ["date", "home_team", "away_team"])
+        merged_stats, _ = clean_optional_stats_frame(merged_stats)
         Path(ENRICHED_STATS_PATH).parent.mkdir(parents=True, exist_ok=True)
         merged_stats.to_csv(ENRICHED_STATS_PATH, index=False)
+    elif not existing_raw.empty:
+        # Persist cleanup even when the API returned no new rows.
+        existing.to_csv(ENRICHED_STATS_PATH, index=False)
 
     if lineup_rows:
         old_lineups = pd.read_csv(MATCH_LINEUPS_PATH) if Path(MATCH_LINEUPS_PATH).exists() else pd.DataFrame()

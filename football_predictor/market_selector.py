@@ -12,8 +12,10 @@ from .optional_models import poisson_total_probability
 
 
 MAX_NON_OBVIOUS_PROBABILITY = 1.0 / 1.40
-MIN_SELECTION_PROBABILITY = 0.50
+MIN_SELECTION_PROBABILITY = 0.52
 MIN_MARKET_EDGE = 0.03
+MIN_AGREEMENT = 0.52
+MIN_DATA_QUALITY = 0.55
 
 
 @dataclass
@@ -38,6 +40,7 @@ class OutcomeCandidate:
             "Уверенность": confidence_label(self.score),
             "Основание": self.reason,
             "Модель": self.model,
+            "Проверка": "рыночная" if self.market_checked else "математическая",
         }
 
 
@@ -229,13 +232,21 @@ def build_candidates(
 
 
 def _is_structurally_obvious(candidate: OutcomeCandidate, features: dict[str, float]) -> bool:
+    # Approximate lower price boundary 1.40 when no market line is available.
     if candidate.probability > MAX_NON_OBVIOUS_PROBABILITY:
         return True
-    # A straightforward win of a much higher-rated team is intentionally excluded;
-    # the user asked for a less obvious, model-supported market.
-    if candidate.category == "Исход матча" and abs(float(features.get("fifa_points_diff", 0.0))) >= 100:
-        if candidate.probability >= 0.55:
+
+    if candidate.category == "Исход матча":
+        fifa_gap = abs(float(features.get("fifa_points_diff", 0.0)))
+        elo_gap = abs(float(features.get("elo_diff", 0.0)))
+        # Do not call a clear favourite's straight win the best "non-obvious" idea.
+        if candidate.probability >= 0.60 or fifa_gap >= 85 or elo_gap >= 125:
             return True
+
+    # Extremely safe unders and team unders are structurally obvious even when
+    # their raw probability is just below the general threshold.
+    if candidate.market_key in {"under_4_5", "home_under_2_5", "away_under_2_5"} and candidate.probability >= 0.66:
+        return True
     return False
 
 
@@ -296,19 +307,27 @@ def select_non_obvious_outcomes(
     feature_rows: list[dict[str, Any]] = []
 
     for candidate in candidates:
-        if candidate.probability < MIN_SELECTION_PROBABILITY or _is_structurally_obvious(candidate, features):
+        if (
+            candidate.probability < MIN_SELECTION_PROBABILITY
+            or candidate.agreement < MIN_AGREEMENT
+            or candidate.data_quality < MIN_DATA_QUALITY
+            or _is_structurally_obvious(candidate, features)
+        ):
             continue
+
         quote = market_snapshot.quote(candidate.market_key) if market_snapshot.available else None
         if quote is not None:
             candidate.market_checked = True
             candidate.market_edge = candidate.probability - quote.fair_probability
             if quote.decimal_odds < 1.40 or candidate.market_edge < MIN_MARKET_EDGE:
                 continue
-        candidate.reason += (
-            " Рыночный консенсус использован только как скрытая проверка преимущества модели."
-            if quote is not None
-            else " Исход прошёл математический фильтр неочевидности; коэффициенты на сайте не показываются."
-        )
+            candidate.reason += " Рыночный консенсус использован только как скрытая проверка преимущества модели."
+        else:
+            candidate.reason += (
+                " Для этого рынка нет надёжной внешней линии; применён строгий математический фильтр "
+                "эквивалента коэффициента от 1,40. Коэффициенты на сайте не показываются."
+            )
+
         eligible.append(candidate)
         feature_rows.append(_canonical_selector_features(candidate, features))
 
@@ -320,7 +339,7 @@ def select_non_obvious_outcomes(
                 candidate.score = float(score)
                 candidate.reason += " Итоговый ранг определён обученным историческим селектором, а не вручную заданными весами."
         else:
-            # Compatibility fallback for an old bundle. New v4.2.1 bundles include
+            # Compatibility fallback for an old bundle. New v4.3 bundles include
             # a trained selector; this branch avoids crashing during redeploy.
             for candidate in eligible:
                 candidate.score = float(candidate.probability)
@@ -331,7 +350,18 @@ def select_non_obvious_outcomes(
         reverse=True,
     )
     selected = eligible[0] if eligible else None
-    alternatives = eligible[1:4]
+    alternatives: list[OutcomeCandidate] = []
+    if selected is not None:
+        seen_categories = {selected.category}
+        for candidate in eligible[1:]:
+            # Prefer alternatives from different market families instead of
+            # showing three near-identical totals.
+            if candidate.category in seen_categories and len(alternatives) < 2:
+                continue
+            alternatives.append(candidate)
+            seen_categories.add(candidate.category)
+            if len(alternatives) >= 3:
+                break
     selector_status = selector_model.status() if selector_model is not None and hasattr(selector_model, "status") else {}
     return {
         "found": selected is not None,

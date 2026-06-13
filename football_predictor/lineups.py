@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
+import unicodedata
 
 import numpy as np
 import pandas as pd
@@ -18,14 +20,21 @@ class SquadAssessment:
     explanation: str
 
 
+def _player_key(value: str) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
 def _player_effective_rating(row: pd.Series) -> float:
+    # ``rating`` is a transparent national-team usage index, not a commercial
+    # player ability rating.  Missing club minutes must remain neutral rather
+    # than being replaced with a fabricated value.
     rating = float(row.get("rating", 0.0) or 0.0)
-    minutes = float(row.get("club_minutes_90d", 0.0) or 0.0)
-    caps = float(row.get("national_caps", 0.0) or 0.0)
+    minutes = pd.to_numeric(pd.Series([row.get("club_minutes_90d")]), errors="coerce").iloc[0]
+    fitness = 1.0 if pd.isna(minutes) else float(np.clip(minutes / 900.0, 0.70, 1.08))
     availability = 1.0 if bool(row.get("available", True)) else 0.0
-    fitness = np.clip(minutes / 900.0, 0.55, 1.10)
-    experience = 1.0 + min(caps, 100.0) / 1000.0
-    return rating * fitness * experience * availability
+    return rating * fitness * availability
 
 
 def _history_strength(
@@ -39,6 +48,8 @@ def _history_strength(
     history = lineup_history[lineup_history["team"] == team].copy()
     if match_date is not None:
         cutoff = pd.Timestamp(match_date)
+        if cutoff.tzinfo is not None:
+            cutoff = cutoff.tz_convert("UTC").tz_localize(None)
         history = history[pd.to_datetime(history["date"], errors="coerce") < cutoff]
     if history.empty:
         return SquadAssessment(
@@ -49,7 +60,7 @@ def _history_strength(
             relative_strength=1.0,
             missing_key_players=0,
             players_used=len(selected_players),
-            explanation="Стартовый состав загружен автоматически, но истории составов пока недостаточно для надёжной оценки силы; применена нейтральная поправка.",
+            explanation="Официальный состав получен, но истории составов пока недостаточно; применена нейтральная поправка.",
         )
 
     history["starter"] = history["starter"].fillna(False).astype(bool)
@@ -60,26 +71,33 @@ def _history_strength(
     history["appearance_value"] = history["recency"] * (
         1.0 + 1.6 * history["starter"].astype(float) + np.clip(history["minutes"], 0, 120) / 90.0
     )
-    player_value = history.groupby("player", as_index=True)["appearance_value"].sum().sort_values(ascending=False)
+    history["player_key"] = history["player"].map(_player_key)
+    player_value = history.groupby("player_key", as_index=True)["appearance_value"].sum().sort_values(ascending=False)
+    display_names = history.drop_duplicates("player_key").set_index("player_key")["player"].to_dict()
     if player_value.empty:
         return None
 
-    expected_names = list(player_value.head(11).index)
+    selected_keys = {_player_key(name) for name in selected_players if _player_key(name)}
+    expected_keys = list(player_value.head(11).index)
+    fallback = float(player_value.median() * 0.25) if not player_value.empty else 0.0
     expected_strength = float(player_value.head(11).sum())
-    selected_strength = float(player_value.reindex(selected_players).fillna(player_value.median() * 0.25).sum())
+    selected_strength = float(sum(player_value.get(key, fallback) for key in selected_keys))
     relative = selected_strength / expected_strength if expected_strength > 0 else 1.0
-    missing = len(set(expected_names[:5]) - set(selected_players))
+    key_five = set(expected_keys[:5])
+    missing = len(key_five - selected_keys)
+    missing_names = [display_names.get(key, key) for key in expected_keys[:5] if key not in selected_keys]
+    detail = f"; вероятные ключевые отсутствия: {', '.join(missing_names[:3])}" if missing_names else ""
     return SquadAssessment(
         team=team,
         available=True,
         expected_strength=expected_strength,
         selected_strength=selected_strength,
-        relative_strength=float(np.clip(relative, 0.78, 1.08)),
+        relative_strength=float(np.clip(relative, 0.82, 1.08)),
         missing_key_players=missing,
         players_used=len(selected_players),
         explanation=(
-            f"Стартовый состав получен автоматически. Сила относительно наиболее часто использовавшегося состава: "
-            f"{relative * 100:.1f}%; отсутствуют {missing} из пяти наиболее значимых игроков по истории составов."
+            f"Официальный состав учтён. Индекс состава относительно привычной стартовой основы: "
+            f"{relative * 100:.1f}%; отсутствуют {missing} из пяти наиболее часто используемых игроков{detail}."
         ),
     )
 
@@ -91,49 +109,60 @@ def assess_squad(
     lineup_history: pd.DataFrame | None = None,
     match_date: str | pd.Timestamp | None = None,
 ) -> SquadAssessment:
-    selected_players = selected_players or []
-    team_rows = player_pool[player_pool["team"] == team].copy() if player_pool is not None and not player_pool.empty else pd.DataFrame()
+    selected_players = [str(name).strip() for name in (selected_players or []) if str(name).strip()]
 
-    if not team_rows.empty and team_rows["rating"].notna().sum() >= 11:
-        team_rows["effective"] = team_rows.apply(_player_effective_rating, axis=1)
-        expected = float(team_rows.nlargest(11, "effective")["effective"].sum())
-        if selected_players:
-            selected = team_rows[team_rows["player"].isin(selected_players)].nlargest(11, "effective")
-        else:
-            selected = team_rows[team_rows["available"]].nlargest(11, "effective")
-        selected_strength = float(selected["effective"].sum())
-        relative = selected_strength / expected if expected > 0 else 1.0
-        key_names = set(team_rows.nlargest(5, "effective")["player"])
-        selected_names = set(selected["player"])
-        missing = len(key_names - selected_names)
+    # Never infer a lineup adjustment from an expected squad.  Before official
+    # lineups appear the prediction must remain explicitly lineup-neutral.
+    if not selected_players:
         return SquadAssessment(
-            team=team,
-            available=True,
-            expected_strength=expected,
-            selected_strength=selected_strength,
-            relative_strength=float(np.clip(relative, 0.50, 1.08)),
-            missing_key_players=missing,
-            players_used=len(selected),
-            explanation=(
-                f"Стартовый состав получен автоматически; использовано игроков: {len(selected)}; "
-                f"сила относительно оптимального состава: {relative * 100:.1f}%; ключевых потерь: {missing}."
-            ),
+            team, False, 0.0, 0.0, 1.0, 0, 0,
+            "Стартовый состав ещё не опубликован; прогноз рассчитан без поправки на игроков.",
         )
+
+    team_rows = player_pool[player_pool["team"] == team].copy() if player_pool is not None and not player_pool.empty else pd.DataFrame()
+    if not team_rows.empty and team_rows["rating"].notna().sum() >= 11:
+        team_rows["player_key"] = team_rows["player"].map(_player_key)
+        team_rows["effective"] = team_rows.apply(_player_effective_rating, axis=1)
+        team_rows = team_rows.sort_values("effective", ascending=False).drop_duplicates("player_key")
+        expected = float(team_rows.head(11)["effective"].sum())
+        selected_keys = {_player_key(name) for name in selected_players if _player_key(name)}
+        selected = team_rows[team_rows["player_key"].isin(selected_keys)].head(11)
+
+        # If names from two sources do not match well, history matching is safer.
+        if len(selected) >= 7:
+            selected_strength = float(selected["effective"].sum())
+            unknown_count = max(0, min(11, len(selected_players)) - len(selected))
+            if unknown_count:
+                selected_strength += unknown_count * float(team_rows.head(18)["effective"].median())
+            relative = selected_strength / expected if expected > 0 else 1.0
+            key_names = set(team_rows.head(5)["player_key"])
+            missing = len(key_names - selected_keys)
+            return SquadAssessment(
+                team=team,
+                available=True,
+                expected_strength=expected,
+                selected_strength=selected_strength,
+                relative_strength=float(np.clip(relative, 0.82, 1.08)),
+                missing_key_players=missing,
+                players_used=len(selected_players),
+                explanation=(
+                    f"Официальный состав учтён; сопоставлено {len(selected)} игроков. "
+                    f"Индекс использования состава относительно привычной основы: {relative * 100:.1f}%; "
+                    f"ключевых отсутствий: {missing}. Это индекс использования в сборной, а не коммерческий рейтинг игроков."
+                ),
+            )
 
     history_based = _history_strength(lineup_history, team, selected_players, match_date)
     if history_based is not None:
         return history_based
 
-    if selected_players:
-        return SquadAssessment(
-            team=team,
-            available=True,
-            expected_strength=1.0,
-            selected_strength=1.0,
-            relative_strength=1.0,
-            missing_key_players=0,
-            players_used=len(selected_players),
-            explanation="Стартовый состав загружен автоматически, но открытый источник не предоставляет достаточных рейтингов игроков; применена нейтральная поправка.",
-        )
-
-    return SquadAssessment(team, False, 0.0, 0.0, 1.0, 0, 0, "Стартовые составы ещё не опубликованы; прогноз рассчитан без поправки на состав.")
+    return SquadAssessment(
+        team=team,
+        available=True,
+        expected_strength=1.0,
+        selected_strength=1.0,
+        relative_strength=1.0,
+        missing_key_players=0,
+        players_used=len(selected_players),
+        explanation="Официальный состав загружен, но открытых данных недостаточно для надёжной оценки игроков; применена нейтральная поправка.",
+    )
