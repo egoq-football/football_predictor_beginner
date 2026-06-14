@@ -41,7 +41,7 @@ from football_predictor.world_cup_live import (
 )
 
 
-st.set_page_config(page_title="World Cup 2026 Predictor v4.5", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="World Cup 2026 Predictor v4.6", page_icon="⚽", layout="wide")
 st.markdown(
     """
     <style>
@@ -49,13 +49,19 @@ st.markdown(
       .best-card {padding:1rem 1.2rem;border:1px solid #9ca3af;border-radius:.75rem;background:#f8fafc;margin:.4rem 0 1rem 0;}
       .best-card h3 {margin:0 0 .25rem 0;}
       .muted {color:#6b7280;font-size:.9rem}
+      .online-pill {position:fixed;right:1rem;bottom:1rem;z-index:9999;display:flex;align-items:center;gap:.42rem;
+        padding:.42rem .68rem;border:1px solid rgba(148,163,184,.55);border-radius:999px;
+        background:rgba(255,255,255,.92);box-shadow:0 4px 16px rgba(15,23,42,.12);
+        color:#334155;font-size:.78rem;font-weight:600;backdrop-filter:blur(8px);}
+      .online-dot {width:.48rem;height:.48rem;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.14);}
+      @media (prefers-color-scheme: dark) {.online-pill {background:rgba(15,23,42,.88);color:#e2e8f0;border-color:rgba(100,116,139,.6);}}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 st.title("⚽ Прогноз матчей чемпионата мира 2026")
-st.caption("Версия сайта 4.5: счётчик онлайна и закрытая история посещений.")
+st.caption("Версия сайта 4.6: улучшенная калибровка, хронологический стекинг и контроль устойчивости прогноза.")
 
 
 def _secret(section: str, name: str) -> str:
@@ -117,10 +123,11 @@ def render_public_visit_counter() -> None:
     except SiteAnalyticsError:
         return
 
-    online_col, today_col, total_col = st.columns(3)
-    online_col.metric("Сейчас онлайн", summary.online_now)
-    today_col.metric("Посещений сегодня", summary.visits_today)
-    total_col.metric("Всего посещений", summary.total_visits)
+    st.markdown(
+        f'<div class="online-pill" title="Активные браузерные сеансы за последние две минуты">'
+        f'<span class="online-dot"></span><span>{summary.online_now} онлайн</span></div>',
+        unsafe_allow_html=True,
+    )
 
 
 render_public_visit_counter()
@@ -158,7 +165,8 @@ def model_component_importance(bundle) -> pd.DataFrame:
         groups = [
             ("Машинное обучение", 0, 3), ("Dixon–Coles", 3, 6), ("Elo", 6, 9),
             ("FIFA", 9, 12), ("Последние матчи", 12, 15),
-            ("Турнирный контекст и качество данных", 15, len(coefs)),
+            ("Турнирный контекст и качество данных", 15, 30),
+            ("Согласие и расхождение моделей", 30, len(coefs)),
         ]
         frame = pd.DataFrame([
             {"Компонент": label, "Относительное влияние": float(coefs[start:end].sum())}
@@ -339,6 +347,18 @@ g1.metric(f"Ожидаемые голы {result['home']}", f"{result['expected_g
 g2.metric(f"Ожидаемые голы {result['away']}", f"{result['expected_goals_away']:.2f}")
 gt.metric("Ожидаемый тотал", f"{result['expected_goals_home'] + result['expected_goals_away']:.2f}")
 
+stability = result.get("stability", {})
+if stability:
+    label = str(stability.get("label", "средняя"))
+    message = (
+        f"Устойчивость прогноза: {label}. "
+        f"Одинакового лидера выбрали {stability.get('leader_agreement', 0.0) * 100:.0f}% базовых моделей."
+    )
+    if label == "низкая":
+        st.warning(message + " Вероятности стоит трактовать осторожно.")
+    else:
+        st.caption(message)
+
 tabs = st.tabs([
     "Обоснование", "Наиболее вероятные исходы", "Голы и точный счёт",
     "Таймы, угловые, карточки", "Составы и данные", "Модели", "Тестирование", "Журнал",
@@ -454,15 +474,46 @@ with tabs[5]:
     st.write("### Вероятности отдельных моделей")
     labels = {"ml": "Машинное обучение", "dixon_coles": "Dixon–Coles", "elo": "Elo", "fifa": "FIFA", "recent_form": "Последние матчи с учётом соперников"}
     layer_rows = [{"Модель": labels.get(key, key), result["home"]: probs["home"], "Ничья": probs["draw"], result["away"]: probs["away"]} for key, probs in result["components"].items()]
-    layer_rows.append({"Модель": "Итог после метамодели и калибровки", result["home"]: result["prob_home_win"], "Ничья": result["prob_draw"], result["away"]: result["prob_away_win"]})
+    layer_rows.append({"Модель": "Итог после метамодели, калибровки и устойчивого смешивания", result["home"]: result["prob_home_win"], "Ничья": result["prob_draw"], result["away"]: result["prob_away_win"]})
     st.dataframe(pd.DataFrame(layer_rows).style.format({result["home"]: "{:.1%}", "Ничья": "{:.1%}", result["away"]: "{:.1%}"}), use_container_width=True, hide_index=True)
+    if stability:
+        st.write("### Устойчивость ансамбля")
+        stability_table = pd.DataFrame([
+            {
+                "Оценка": stability.get("label", "—"),
+                "Согласие лидера": stability.get("leader_agreement"),
+                "Среднее расхождение": stability.get("mean_disagreement"),
+                "Максимальный разрыв итога и консенсуса": stability.get("ensemble_consensus_gap"),
+            }
+        ])
+        st.dataframe(
+            stability_table.style.format({
+                "Согласие лидера": "{:.0%}",
+                "Среднее расхождение": "{:.3f}",
+                "Максимальный разрыв итога и консенсуса": "{:.1%}",
+            }),
+            use_container_width=True, hide_index=True,
+        )
     st.write("### Влияние компонентов, изученное метамоделью")
     st.dataframe(model_component_importance(bundle).style.format({"Относительное влияние": "{:.1%}"}), use_container_width=True, hide_index=True)
 
 with tabs[6]:
     st.write("### Хронологическое тестирование")
-    st.dataframe(pd.DataFrame(bundle.metrics).style.format({"accuracy": "{:.1%}", "log_loss": "{:.4f}", "brier": "{:.4f}"}), use_container_width=True, hide_index=True)
-    st.write(f"Температура калибровки: **{bundle.calibrator.temperature_:.3f}**")
+    metric_frame = pd.DataFrame(bundle.metrics)
+    metric_formats = {
+        "accuracy": "{:.1%}", "log_loss": "{:.4f}", "brier": "{:.4f}", "ece": "{:.4f}",
+        "away_brier": "{:.4f}", "draw_brier": "{:.4f}", "home_brier": "{:.4f}",
+        "actual_draw_share": "{:.1%}", "predicted_draw_share": "{:.1%}",
+    }
+    st.dataframe(metric_frame.style.format(metric_formats), use_container_width=True, hide_index=True)
+    scales = getattr(bundle.calibrator, "scale_", np.ones(3))
+    biases = getattr(bundle.calibrator, "bias_", np.zeros(3))
+    st.caption(
+        "Калибровка по классам — "
+        f"масштабы: {scales[0]:.3f} / {scales[1]:.3f} / {scales[2]:.3f}; "
+        f"смещения: {biases[0]:+.3f} / {biases[1]:+.3f} / {biases[2]:+.3f}. "
+        f"Доля метамодели после проверки устойчивости: {getattr(bundle.blender, 'meta_weight_', 1.0):.1%}."
+    )
     selector_status = result.get("non_obvious_selection", {}).get("selector_status", {})
     if selector_status:
         st.write("### Проверка селектора неочевидного исхода")

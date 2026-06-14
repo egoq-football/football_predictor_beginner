@@ -45,7 +45,7 @@ class SiteAnalyticsClient:
             "apikey": key,
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "football-predictor-site-analytics/4.5",
+            "User-Agent": "football-predictor-site-analytics/4.6",
         }
         # Legacy anon/service_role keys are JWTs. New sb_publishable/sb_secret
         # keys are sent through apikey only, in accordance with Supabase docs.

@@ -37,11 +37,11 @@ def build_dataset(download: bool = False) -> tuple[pd.DataFrame, pd.DataFrame, F
     return merged, table, fifa
 
 
-def _primary_log_loss(bundle: WorldCupModelBundle) -> float:
+def _primary_metrics(bundle: WorldCupModelBundle) -> dict:
     for row in bundle.metrics:
         if row.get("model") == "Итоговый ансамбль":
-            return float(row.get("log_loss", 999.0))
-    return 999.0
+            return dict(row)
+    return {"log_loss": 999.0, "ece": 999.0}
 
 
 def train_and_maybe_promote(
@@ -57,13 +57,34 @@ def train_and_maybe_promote(
     if not promote:
         try:
             current = load_bundle(MODEL_BUNDLE_PATH)
-            current_loss = _primary_log_loss(current)
-            candidate_loss = _primary_log_loss(candidate)
-            if candidate_loss <= current_loss - min_improvement:
+            current_metrics = _primary_metrics(current)
+            candidate_metrics = _primary_metrics(candidate)
+            current_loss = float(current_metrics.get("log_loss", 999.0))
+            candidate_loss = float(candidate_metrics.get("log_loss", 999.0))
+            current_ece = float(current_metrics.get("ece", 999.0))
+            candidate_ece = float(candidate_metrics.get("ece", 999.0))
+
+            class_keys = ("away_brier", "draw_brier", "home_brier")
+            class_safe = all(
+                float(candidate_metrics.get(key, 999.0))
+                <= float(current_metrics.get(key, 999.0)) + 0.012
+                for key in class_keys
+            )
+            calibration_safe = candidate_ece <= current_ece + 0.008
+            loss_improved = candidate_loss <= current_loss - min_improvement
+
+            if loss_improved and calibration_safe and class_safe:
                 promote = True
-                reason = f"Log Loss улучшился: {current_loss:.4f} → {candidate_loss:.4f}"
-            else:
+                reason = (
+                    f"Log Loss улучшился: {current_loss:.4f} → {candidate_loss:.4f}; "
+                    f"калибровка и Brier по каждому исходу не ухудшились существенно"
+                )
+            elif not loss_improved:
                 reason = f"Кандидат не улучшил Log Loss: текущий {current_loss:.4f}, кандидат {candidate_loss:.4f}"
+            elif not calibration_safe:
+                reason = f"Кандидат улучшил Log Loss, но ухудшил калибровку ECE: {current_ece:.4f} → {candidate_ece:.4f}"
+            else:
+                reason = "Кандидат улучшил общий Log Loss, но слишком ухудшил Brier одного из исходов"
         except Exception:
             promote = True
             reason = "текущая модель несовместима"

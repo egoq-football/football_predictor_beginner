@@ -168,6 +168,29 @@ def predict_world_cup_match(
         for name, values in raw_components.items()
     }
 
+    component_matrix = np.vstack([np.asarray(values, dtype=float) for values in raw_components.values()])
+    component_leaders = component_matrix.argmax(axis=1)
+    leader_counts = np.bincount(component_leaders, minlength=3)
+    leader_agreement = float(leader_counts.max() / max(len(component_leaders), 1))
+    component_consensus = component_matrix.mean(axis=0)
+    disagreement = float(component_matrix.std(axis=0).mean())
+    ensemble_consensus_gap = float(np.max(np.abs(final_probs - component_consensus)))
+    if leader_agreement >= 0.80 and disagreement < 0.075 and ensemble_consensus_gap < 0.14:
+        stability_label = "высокая"
+    elif leader_agreement >= 0.60 and disagreement < 0.115 and ensemble_consensus_gap < 0.20:
+        stability_label = "средняя"
+    else:
+        stability_label = "низкая"
+    stability = {
+        "label": stability_label,
+        "leader_agreement": leader_agreement,
+        "mean_disagreement": disagreement,
+        "ensemble_consensus_gap": ensemble_consensus_gap,
+        "consensus_away": float(component_consensus[0]),
+        "consensus_draw": float(component_consensus[1]),
+        "consensus_home": float(component_consensus[2]),
+    }
+
     dc_prediction = bundle.dixon_coles.predict(home, away, neutral)
     markets = score_markets(dc_prediction)
 
@@ -303,6 +326,8 @@ def predict_world_cup_match(
         summary += " Наиболее заметные факторы: " + "; ".join(headline_parts) + "."
     if non_obvious.get("found"):
         summary += f" Отдельно найден неочевидный исход: {non_obvious['best']['Исход']}."
+    if stability_label == "низкая":
+        summary += " Базовые модели заметно расходятся, поэтому прогноз следует считать нестабильным."
 
     progression = None
     if context.stage == "knockout":
@@ -340,6 +365,7 @@ def predict_world_cup_match(
         "non_obvious_selection": non_obvious,
         "progression": progression,
         "components": components,
+        "stability": stability,
         "outcomes": outcomes,
         "features": feature_dict,
         "explanations": [summary] + [row["Что увидела модель"] for row in explanation_rows],

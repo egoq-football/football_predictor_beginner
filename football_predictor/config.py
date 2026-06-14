@@ -22,7 +22,7 @@ WORLD_CUP_BACKTEST_PATH = MODELS_DIR / "world_cup_backtest.csv"
 DATA_AUDIT_PATH = MODELS_DIR / "data_audit.json"
 
 DATA_START_DATE = "2010-01-01"
-MODEL_VERSION = "4.3.0-world-cup-2026"
+MODEL_VERSION = "4.6.0-world-cup-2026"
 
 WORLD_CUP_TEAMS = {
     "A": ["Mexico", "South Africa", "South Korea", "Czech Republic"],

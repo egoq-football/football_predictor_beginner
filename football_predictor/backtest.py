@@ -9,7 +9,7 @@ from sklearn.metrics import accuracy_score, log_loss
 from .features import build_current_builder, current_feature_frame
 from .context import MatchContext
 from .fifa_rankings import FifaRankingHistory
-from .model import multiclass_brier, train_bundle
+from .model import class_brier_scores, expected_calibration_error, multiclass_brier, train_bundle
 
 
 def backtest_world_cups(table: pd.DataFrame, matches: pd.DataFrame, fifa: FifaRankingHistory, years=(2014, 2018, 2022)) -> pd.DataFrame:
@@ -42,11 +42,18 @@ def backtest_world_cups(table: pd.DataFrame, matches: pd.DataFrame, fifa: FifaRa
             builder.update(match)
             appearances[home] = h_apps + 1; appearances[away] = a_apps + 1
         probs_arr = np.vstack(probs); y_arr = np.array(y, dtype=int)
+        class_brier = class_brier_scores(y_arr, probs_arr)
         rows.append({
             "tournament": f"FIFA World Cup {year}",
             "matches": len(y_arr),
             "accuracy": accuracy_score(y_arr, probs_arr.argmax(axis=1)),
             "log_loss": log_loss(y_arr, probs_arr, labels=[0, 1, 2]),
             "brier": multiclass_brier(y_arr, probs_arr),
+            "ece": expected_calibration_error(y_arr, probs_arr),
+            "away_brier": float(class_brier[0]),
+            "draw_brier": float(class_brier[1]),
+            "home_brier": float(class_brier[2]),
+            "actual_draw_share": float(np.mean(y_arr == 1)),
+            "predicted_draw_share": float(probs_arr[:, 1].mean()),
         })
     return pd.DataFrame(rows)

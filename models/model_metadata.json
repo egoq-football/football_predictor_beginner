@@ -1,58 +1,100 @@
 {
-  "promoted": false,
-  "reason": "Кандидат не улучшил Log Loss: текущий 0.8959, кандидат 0.8973",
-  "candidate_train_end": "2026-06-13",
-  "candidate_training_matches": 15824,
+  "promoted": true,
+  "reason": "первая модель",
+  "candidate_train_end": "2026-06-11",
+  "candidate_training_matches": 15818,
   "candidate_metrics": [
     {
       "model": "Итоговый ансамбль",
-      "matches": 1899,
-      "accuracy": 0.5813586097946287,
-      "log_loss": 0.8973456698274207,
-      "brier": 0.5285244336608456
+      "matches": 1582,
+      "accuracy": 0.5992414664981036,
+      "log_loss": 0.8570189634884564,
+      "brier": 0.5027812299116322,
+      "ece": 0.02930763320976217,
+      "away_brier": 0.15072201325134343,
+      "draw_brier": 0.16873415017468063,
+      "home_brier": 0.1833250664856085,
+      "actual_draw_share": 0.2307206068268015,
+      "predicted_draw_share": 0.25536025165399606
     },
     {
       "model": "Машинное обучение",
-      "matches": 1899,
-      "accuracy": 0.5697735650342285,
-      "log_loss": 0.9030684522075455,
-      "brier": 0.5309366809057671
+      "matches": 1582,
+      "accuracy": 0.5948166877370418,
+      "log_loss": 0.8595456939561535,
+      "brier": 0.5039362417314269,
+      "ece": 0.027816143657787017,
+      "away_brier": 0.15036917778087608,
+      "draw_brier": 0.1697262741228215,
+      "home_brier": 0.1838407898277295,
+      "actual_draw_share": 0.2307206068268015,
+      "predicted_draw_share": 0.2373959594430801
     },
     {
       "model": "Dixon–Coles",
-      "matches": 1899,
-      "accuracy": 0.5813586097946287,
-      "log_loss": 0.8969537125262036,
-      "brier": 0.5275287507854388
+      "matches": 1582,
+      "accuracy": 0.5853350189633375,
+      "log_loss": 0.8928439039350622,
+      "brier": 0.5249537825259046,
+      "ece": 0.03534301233674735,
+      "away_brier": 0.16035083444386092,
+      "draw_brier": 0.17135738211047385,
+      "home_brier": 0.19324556597156956,
+      "actual_draw_share": 0.2307206068268015,
+      "predicted_draw_share": 0.24086846595565425
     },
     {
       "model": "Elo",
-      "matches": 1899,
-      "accuracy": 0.5934702474986835,
-      "log_loss": 0.9091585104375444,
-      "brier": 0.5338134524322202
+      "matches": 1582,
+      "accuracy": 0.5897597977243995,
+      "log_loss": 0.9077996341669268,
+      "brier": 0.5330934712173769,
+      "ece": 0.04882214438113409,
+      "away_brier": 0.16052954661457755,
+      "draw_brier": 0.17536338580808183,
+      "home_brier": 0.19720053879471758,
+      "actual_draw_share": 0.2307206068268015,
+      "predicted_draw_share": 0.2464362465026651
     },
     {
       "model": "FIFA",
-      "matches": 1899,
-      "accuracy": 0.5518694049499737,
-      "log_loss": 0.925332225296496,
-      "brier": 0.5453208716088501
+      "matches": 1582,
+      "accuracy": 0.5530973451327433,
+      "log_loss": 0.9205944159990428,
+      "brier": 0.5417899027643903,
+      "ece": 0.07183909950764156,
+      "away_brier": 0.1639459444667051,
+      "draw_brier": 0.17685590389192418,
+      "home_brier": 0.2009880544057613,
+      "actual_draw_share": 0.2307206068268015,
+      "predicted_draw_share": 0.23993614472337615
     },
     {
       "model": "Последние матчи",
-      "matches": 1899,
-      "accuracy": 0.49921011058451814,
-      "log_loss": 1.068219447603467,
-      "brier": 0.635256818735327
+      "matches": 1582,
+      "accuracy": 0.5050568900126422,
+      "log_loss": 1.0643963178061957,
+      "brier": 0.6330948211039036,
+      "ece": 0.08168956120434524,
+      "away_brier": 0.2107373684694647,
+      "draw_brier": 0.17890808590577584,
+      "home_brier": 0.24344936672866294,
+      "actual_draw_share": 0.2307206068268015,
+      "predicted_draw_share": 0.20703669901675706
     },
     {
       "model": "Всегда первая команда",
-      "matches": 1899,
-      "accuracy": 0.478146392838336,
-      "log_loss": 1.0883991315374824,
-      "brier": 0.6547763033175356
+      "matches": 1582,
+      "accuracy": 0.47914032869785084,
+      "log_loss": 1.0867105311399106,
+      "brier": 0.6537696586599241,
+      "ece": 0.07342604298356509,
+      "away_brier": 0.21808900126421965,
+      "draw_brier": 0.17786030341340076,
+      "home_brier": 0.2578203539823104,
+      "actual_draw_share": 0.2307206068268015,
+      "predicted_draw_share": 0.25
     }
   ],
-  "selected_version": "4.2.1-world-cup-2026"
+  "selected_version": "4.6.0-world-cup-2026"
 }
