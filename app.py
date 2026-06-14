@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+from uuid import uuid4
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,7 @@ from football_predictor.journal import (
 )
 from football_predictor.odds_provider import fetch_market_snapshot
 from football_predictor.prediction import predict_world_cup_match
+from football_predictor.site_analytics import SiteAnalyticsClient, SiteAnalyticsError
 from football_predictor.training import load_runtime
 from football_predictor.world_cup_live import (
     append_lineup_snapshot,
@@ -39,7 +41,7 @@ from football_predictor.world_cup_live import (
 )
 
 
-st.set_page_config(page_title="World Cup 2026 Predictor v4.4", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="World Cup 2026 Predictor v4.5", page_icon="⚽", layout="wide")
 st.markdown(
     """
     <style>
@@ -53,7 +55,7 @@ st.markdown(
 )
 
 st.title("⚽ Прогноз матчей чемпионата мира 2026")
-st.caption("Версия сайта 4.4: резервный источник официальных составов и более компактная выдача исходов.")
+st.caption("Версия сайта 4.5: счётчик онлайна и закрытая история посещений.")
 
 
 def _secret(section: str, name: str) -> str:
@@ -79,6 +81,49 @@ def _github_store() -> GitHubJournalStore | None:
 def _file_stamp(path: str | Path) -> float:
     p = Path(path)
     return p.stat().st_mtime if p.exists() else 0.0
+
+
+def _analytics_client() -> SiteAnalyticsClient:
+    try:
+        cfg = st.secrets.get("site_analytics", {})
+        return SiteAnalyticsClient(
+            url=cfg.get("supabase_url", ""),
+            publishable_key=cfg.get("publishable_key", ""),
+            secret_key=cfg.get("secret_key", ""),
+        )
+    except Exception:
+        return SiteAnalyticsClient()
+
+
+analytics_client = _analytics_client()
+if "site_analytics_session_id" not in st.session_state:
+    st.session_state["site_analytics_session_id"] = str(uuid4())
+if "site_analytics_registered" not in st.session_state:
+    st.session_state["site_analytics_registered"] = False
+
+
+@st.fragment(run_every="30s")
+def render_public_visit_counter() -> None:
+    if not analytics_client.public_enabled:
+        return
+    session_id = st.session_state["site_analytics_session_id"]
+    try:
+        if not st.session_state["site_analytics_registered"]:
+            analytics_client.register_session(session_id, page="main")
+            st.session_state["site_analytics_registered"] = True
+        else:
+            analytics_client.heartbeat(session_id, page="main")
+        summary = analytics_client.public_summary()
+    except SiteAnalyticsError:
+        return
+
+    online_col, today_col, total_col = st.columns(3)
+    online_col.metric("Сейчас онлайн", summary.online_now)
+    today_col.metric("Посещений сегодня", summary.visits_today)
+    total_col.metric("Всего посещений", summary.total_visits)
+
+
+render_public_visit_counter()
 
 
 @st.cache_resource(show_spinner="Загружаю модели и историю матчей…")
