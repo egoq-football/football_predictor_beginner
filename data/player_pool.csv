@@ -956,59 +956,65 @@ Finland,Lassi Lappalainen,,58.0,,2,True
 Finland,Onni Johannes Simonpoika Valakari,,56.0,,2,True
 Finland,Robert Taylor,,54.0,,2,True
 Finland,Nicholas Hamalainen,,52.0,,1,True
-France,Kylian Mbappé Lottin,,100.0,,24,True
-France,Jules Koundé,,99.0566037735849,,16,True
-France,Theo Bernard François Hernández,,98.11320754716982,,13,True
-France,Dayotchanculle Upamecano,,97.16981132075472,,13,True
-France,Aurélien Djani Tchouaméni,,96.22641509433961,,13,True
-France,Antoine Griezmann,,95.28301886792454,,24,True
-France,Adrien Rabiot,,94.33962264150944,,15,True
-France,William Saliba,,93.39622641509433,,13,True
-France,Ousmane Dembélé,,92.45283018867924,,22,True
-France,N'Golo Kanté,,91.50943396226415,,15,True
-France,Mike Maignan,,90.56603773584905,,10,True
-France,Marcus Thuram,,89.62264150943396,,15,True
-France,Randal Kolo Muani,,88.67924528301887,,13,True
-France,Olivier Giroud,,87.73584905660377,,24,True
-France,Eduardo Camavinga,,86.79245283018868,,13,True
-France,Ibrahima Konaté,,85.84905660377359,,13,True
-France,Benjamin Pavard,,84.90566037735849,,24,True
-France,Raphaël Varane,,83.9622641509434,,18,True
-France,Hugo Lloris,,83.01886792452831,,18,True
-France,Youssouf Fofana,,82.0754716981132,,13,True
-France,Kingsley Coman,,81.13207547169812,,16,True
-France,Bradley Barcola,,80.18867924528303,,6,True
-France,Alphonse Areola,,79.24528301886792,,20,True
-France,Brice Samba,,76.88679245283019,,6,True
-France,Ferland Mendy,,76.88679245283019,,6,True
-France,Jonathan Clauss,,76.88679245283019,,6,True
-France,Warren Zaire Emery,,76.88679245283019,,6,True
-France,Steve Mandanda,,74.52830188679245,,18,True
-France,Axel Disasi,,73.58490566037736,,7,True
-France,Mattéo Guendouzi Olié,,72.64150943396227,,7,True
-France,Jordan Veretout,,71.69811320754717,,7,True
-France,Lucas Hernández Pi,,70.75471698113208,,12,True
-France,Paul Pogba,,69.81132075471697,,11,True
-France,Presnel Kimpembe,,68.86792452830188,,11,True
-France,Karim Benzema,,67.9245283018868,,4,True
-France,Corentin Tolisso,,66.98113207547169,,11,True
-France,Clément Lenglet,,66.0377358490566,,4,True
-France,Lucas Digne,,65.09433962264151,,3,True
-France,Thomas Lemar,,64.15094339622641,,11,True
-France,N''Golo Kanté,,63.20754716981132,,2,True
-France,Samuel Yves Umtiti,,62.264150943396224,,7,True
-France,Moussa Sissoko,,61.320754716981135,,3,True
-France,Kurt Happy Zouma,,59.90566037735849,,3,True
-France,Wissam Ben Yedder,,59.90566037735849,,3,True
-France,Blaise Matuidi,,58.490566037735846,,6,True
-France,Léo Dubois,,57.54716981132076,,2,True
-France,Djibril Sidibé,,56.60377358490566,,7,True
-France,Steven N'Kemboanza Mike Christopher Nzonzi,,55.660377358490564,,6,True
-France,Nabil Fekir,,54.716981132075475,,7,True
-France,Benjamin Mendy,,53.77358490566038,,7,True
-France,Florian Thauvin,,52.83018867924528,,7,True
-France,Adil Rami,,51.886792452830186,,7,True
-France,Steven N''Kemboanza Mike Christopher Nzonzi,,50.943396226415096,,1,True
+France,Jules Koundé,,100.0,,17,True
+France,Adrien Rabiot,,99.15254237288136,,16,True
+France,William Saliba,,98.30508474576271,,14,True
+France,Ousmane Dembélé,,97.45762711864407,,23,True
+France,Mike Maignan,,96.61016949152543,,11,True
+France,Kylian Mbappé Lottin,,95.76271186440678,,24,True
+France,Theo Bernard François Hernández,,94.91525423728814,,13,True
+France,Dayotchanculle Upamecano,,94.0677966101695,,13,True
+France,Aurélien Djani Tchouaméni,,93.22033898305085,,13,True
+France,Antoine Griezmann,,92.37288135593221,,24,True
+France,N'Golo Kanté,,91.52542372881356,,15,True
+France,Marcus Thuram,,90.67796610169492,,15,True
+France,Randal Kolo Muani,,89.83050847457628,,13,True
+France,Olivier Giroud,,88.98305084745763,,24,True
+France,Eduardo Camavinga,,88.13559322033899,,13,True
+France,Ibrahima Konaté,,87.28813559322035,,13,True
+France,Benjamin Pavard,,86.4406779661017,,24,True
+France,Raphaël Varane,,85.59322033898306,,18,True
+France,Hugo Lloris,,84.74576271186442,,18,True
+France,Youssouf Fofana,,83.89830508474576,,13,True
+France,Kingsley Coman,,83.05084745762713,,16,True
+France,Aurélien Tchouaméni,,80.08474576271186,,1,True
+France,Dayot Upamecano,,80.08474576271186,,1,True
+France,Désiré Doué,,80.08474576271186,,1,True
+France,Kylian Mbappé,,80.08474576271186,,1,True
+France,Michael Olise,,80.08474576271186,,1,True
+France,Theo Hernández,,80.08474576271186,,1,True
+France,Bradley Barcola,,77.11864406779661,,6,True
+France,Alphonse Areola,,76.27118644067797,,20,True
+France,Brice Samba,,74.15254237288136,,6,True
+France,Ferland Mendy,,74.15254237288136,,6,True
+France,Jonathan Clauss,,74.15254237288136,,6,True
+France,Warren Zaire Emery,,74.15254237288136,,6,True
+France,Steve Mandanda,,72.03389830508475,,18,True
+France,Axel Disasi,,71.1864406779661,,7,True
+France,Mattéo Guendouzi Olié,,70.33898305084746,,7,True
+France,Jordan Veretout,,69.49152542372882,,7,True
+France,Lucas Hernández Pi,,68.64406779661017,,12,True
+France,Paul Pogba,,67.79661016949153,,11,True
+France,Presnel Kimpembe,,66.94915254237287,,11,True
+France,Karim Benzema,,66.10169491525423,,4,True
+France,Corentin Tolisso,,65.2542372881356,,11,True
+France,Clément Lenglet,,64.40677966101696,,4,True
+France,Lucas Digne,,63.559322033898304,,3,True
+France,Thomas Lemar,,62.71186440677966,,11,True
+France,N''Golo Kanté,,61.86440677966102,,2,True
+France,Samuel Yves Umtiti,,61.016949152542374,,7,True
+France,Moussa Sissoko,,60.16949152542373,,3,True
+France,Kurt Happy Zouma,,58.898305084745765,,3,True
+France,Wissam Ben Yedder,,58.898305084745765,,3,True
+France,Blaise Matuidi,,57.6271186440678,,6,True
+France,Léo Dubois,,56.77966101694915,,2,True
+France,Djibril Sidibé,,55.932203389830505,,7,True
+France,Steven N'Kemboanza Mike Christopher Nzonzi,,55.08474576271186,,6,True
+France,Nabil Fekir,,54.23728813559322,,7,True
+France,Benjamin Mendy,,53.389830508474574,,7,True
+France,Florian Thauvin,,52.54237288135593,,7,True
+France,Adil Rami,,51.69491525423729,,7,True
+France,Steven N''Kemboanza Mike Christopher Nzonzi,,50.847457627118644,,1,True
 Gambia,Baboucarr Gaye,,98.07692307692308,,3,True
 Gambia,James Gomez,,98.07692307692308,,3,True
 Gambia,Musa Barrow,,98.07692307692308,,3,True
@@ -2129,58 +2135,61 @@ Scotland,Jon McLaughlin,,56.08108108108108,,3,True
 Scotland,John Fleck,,54.054054054054056,,2,True
 Scotland,David Turnbull,,52.7027027027027,,2,True
 Scotland,Declan Gallagher,,51.351351351351354,,1,True
-Senegal,Kalidou Koulibaly,,100.0,,11,True
-Senegal,Edouard Mendy,,99.03846153846153,,8,True
-Senegal,Ismaïla Sarr,,98.07692307692308,,11,True
-Senegal,Ismail Jakobs,,97.11538461538461,,8,True
-Senegal,Krépin Diatta,,96.15384615384616,,8,True
-Senegal,Abdou Diallo,,95.1923076923077,,7,True
-Senegal,Sadio Mané,,94.23076923076923,,7,True
-Senegal,Habibou Mouhamadou Diallo,,93.26923076923077,,4,True
-Senegal,Pape Gueye,,92.3076923076923,,7,True
-Senegal,Pape Matar Sarr,,91.34615384615384,,8,True
-Senegal,Nampalys Mendy,,90.38461538461539,,8,True
-Senegal,Lamine Camara,,89.42307692307692,,4,True
-Senegal,Iliman Ndiaye,,88.46153846153847,,8,True
-Senegal,Pathé Ismaël Ciss,,87.5,,8,True
-Senegal,Idrissa Gana Gueye,,86.53846153846153,,8,True
-Senegal,Moussa Niakhate,,85.57692307692308,,2,True
-Senegal,Youssouf Sabaly,,84.61538461538461,,7,True
-Senegal,Abdoulaye Seck,,83.65384615384616,,4,True
-Senegal,Boulaye Dia,,82.6923076923077,,4,True
-Senegal,Cheikhou Kouyaté,,81.73076923076923,,10,True
-Senegal,Nicolas Jackson,,80.76923076923077,,8,True
-Senegal,Alfred Benjamin Gomis,,79.8076923076923,,11,True
-Senegal,Formose Mendy,,78.84615384615384,,8,True
-Senegal,Cheikh Ahmadou Bamba Mbacke Dieng,,77.88461538461539,,7,True
-Senegal,Fodé Ballo Touré,,76.92307692307692,,7,True
-Senegal,Mory Diaw,,75.96153846153847,,4,True
-Senegal,Pape Abou Cissé,,75.0,,4,True
-Senegal,Famara Diedhiou,,74.03846153846155,,4,True
-Senegal,Idrissa Gueye,,73.07692307692308,,2,True
-Senegal,Moussa N''Diaye,,71.15384615384616,,4,True
-Senegal,Moustapha Name,,71.15384615384616,,4,True
-Senegal,Timothy Dieng,,71.15384615384616,,4,True
-Senegal,Mamadou Loum N'Diaye,,69.23076923076923,,3,True
-Senegal,Abdoulaye Niakhate Ndiaye,,68.26923076923077,,1,True
-Senegal,Abdallah Dipo Sima,,67.3076923076923,,1,True
-Senegal,Mamadou Loum N''Diaye,,66.34615384615384,,1,True
-Senegal,Khadim N'Diaye,,64.90384615384616,,3,True
-Senegal,Salif Sané,,64.90384615384616,,3,True
-Senegal,M'Baye Babacar Niang,,63.46153846153846,,3,True
-Senegal,Moussa Wagué,,62.5,,3,True
-Senegal,Alfred John Momar N'Diaye,,61.53846153846154,,3,True
-Senegal,Lamine Gassama,,60.57692307692308,,3,True
-Senegal,Keita Baldé Diao,,59.61538461538461,,3,True
-Senegal,Papa Alioune N'Diaye,,58.65384615384615,,3,True
-Senegal,Mame Biram Diouf,,57.69230769230769,,3,True
-Senegal,Cheikh N'Doye,,56.73076923076923,,3,True
-Senegal,Pape Moussa Konaté,,55.76923076923077,,3,True
-Senegal,Diafra Sakho,,54.80769230769231,,3,True
-Senegal,Abdoulaye Diallo,,52.40384615384615,,3,True
-Senegal,Adama Mbengue,,52.40384615384615,,3,True
-Senegal,Moussa Sow,,52.40384615384615,,3,True
-Senegal,Serigne Modou Kara Mbodji,,52.40384615384615,,3,True
+Senegal,Kalidou Koulibaly,,100.0,,12,True
+Senegal,Ismaïla Sarr,,99.0909090909091,,12,True
+Senegal,Krépin Diatta,,98.18181818181819,,9,True
+Senegal,Sadio Mané,,97.27272727272728,,8,True
+Senegal,Pape Gueye,,96.36363636363636,,8,True
+Senegal,Lamine Camara,,95.45454545454545,,5,True
+Senegal,Edouard Mendy,,94.54545454545455,,8,True
+Senegal,Ismail Jakobs,,93.63636363636363,,8,True
+Senegal,Nicolas Jackson,,92.72727272727272,,9,True
+Senegal,Abdou Diallo,,91.81818181818181,,7,True
+Senegal,Idrissa Gueye,,90.9090909090909,,3,True
+Senegal,Habibou Mouhamadou Diallo,,90.0,,4,True
+Senegal,Pape Matar Sarr,,89.0909090909091,,8,True
+Senegal,El Hadji Malick Diouf,,87.27272727272728,,1,True
+Senegal,Moussa Niakhaté,,87.27272727272728,,1,True
+Senegal,Édouard Mendy,,87.27272727272728,,1,True
+Senegal,Nampalys Mendy,,85.45454545454545,,8,True
+Senegal,Iliman Ndiaye,,84.54545454545455,,8,True
+Senegal,Pathé Ismaël Ciss,,83.63636363636363,,8,True
+Senegal,Idrissa Gana Gueye,,82.72727272727272,,8,True
+Senegal,Moussa Niakhate,,81.81818181818181,,2,True
+Senegal,Youssouf Sabaly,,80.9090909090909,,7,True
+Senegal,Abdoulaye Seck,,80.0,,4,True
+Senegal,Boulaye Dia,,79.0909090909091,,4,True
+Senegal,Cheikhou Kouyaté,,78.18181818181819,,10,True
+Senegal,Alfred Benjamin Gomis,,77.27272727272727,,11,True
+Senegal,Formose Mendy,,76.36363636363636,,8,True
+Senegal,Cheikh Ahmadou Bamba Mbacke Dieng,,75.45454545454545,,7,True
+Senegal,Fodé Ballo Touré,,74.54545454545455,,7,True
+Senegal,Mory Diaw,,73.63636363636364,,4,True
+Senegal,Pape Abou Cissé,,72.72727272727272,,4,True
+Senegal,Famara Diedhiou,,71.81818181818181,,4,True
+Senegal,Moussa N''Diaye,,70.0,,4,True
+Senegal,Moustapha Name,,70.0,,4,True
+Senegal,Timothy Dieng,,70.0,,4,True
+Senegal,Mamadou Loum N'Diaye,,68.18181818181819,,3,True
+Senegal,Abdoulaye Niakhate Ndiaye,,67.27272727272728,,1,True
+Senegal,Abdallah Dipo Sima,,66.36363636363636,,1,True
+Senegal,Mamadou Loum N''Diaye,,65.45454545454545,,1,True
+Senegal,Khadim N'Diaye,,64.0909090909091,,3,True
+Senegal,Salif Sané,,64.0909090909091,,3,True
+Senegal,M'Baye Babacar Niang,,62.72727272727273,,3,True
+Senegal,Moussa Wagué,,61.81818181818182,,3,True
+Senegal,Alfred John Momar N'Diaye,,60.90909090909091,,3,True
+Senegal,Lamine Gassama,,60.0,,3,True
+Senegal,Keita Baldé Diao,,59.09090909090909,,3,True
+Senegal,Papa Alioune N'Diaye,,58.18181818181818,,3,True
+Senegal,Mame Biram Diouf,,57.27272727272727,,3,True
+Senegal,Cheikh N'Doye,,56.36363636363636,,3,True
+Senegal,Pape Moussa Konaté,,55.45454545454545,,3,True
+Senegal,Diafra Sakho,,54.54545454545455,,3,True
+Senegal,Abdoulaye Diallo,,52.27272727272727,,3,True
+Senegal,Adama Mbengue,,52.27272727272727,,3,True
+Senegal,Moussa Sow,,52.27272727272727,,3,True
+Senegal,Serigne Modou Kara Mbodji,,52.27272727272727,,3,True
 Serbia,Nikola Milenković,,100.0,,9,True
 Serbia,Milos Veljkovic,,98.86363636363637,,9,True
 Serbia,Strahinja Pavlović,,97.72727272727272,,6,True
